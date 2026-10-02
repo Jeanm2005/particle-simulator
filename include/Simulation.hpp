@@ -28,6 +28,7 @@ public:
 
     SimulationResult run();
 
+    // Throws if the output cannot be opened or completely written.
     void writeCloudXYZ(const SimulationResult& result,
                        const std::string& filename) const;
 

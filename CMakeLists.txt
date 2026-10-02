@@ -40,7 +40,7 @@ endif()
 
 if(HAS_GL AND glm_FOUND)
     message(STATUS "OpenGL visualiser: ENABLED")
-    list(APPEND CORE_SOURCES src/Engine.cpp)
+    list(APPEND CORE_SOURCES src/Engine.cpp src/ShaderProgram.cpp)
     add_executable(atom_sim ${CORE_SOURCES})
     target_compile_definitions(atom_sim PRIVATE QM_HAS_OPENGL=1)
     target_include_directories(atom_sim PRIVATE include ${GLM_INCLUDE_DIR})
@@ -55,8 +55,13 @@ else()
     target_include_directories(atom_sim PRIVATE include)
 endif()
 
-install(TARGETS atom_sim DESTINATION bin)
-install(DIRECTORY data/ DESTINATION share/atom_sim/data)
+include(GNUInstallDirs)
+file(RELATIVE_PATH QM_INSTALL_DATA_FROM_BIN
+    "${CMAKE_INSTALL_FULL_BINDIR}" "${CMAKE_INSTALL_FULL_DATADIR}/atom_sim/data")
+configure_file(cmake/DataPaths.hpp.in generated/DataPaths.hpp @ONLY)
+target_include_directories(atom_sim PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
+install(TARGETS atom_sim DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(DIRECTORY data/ DESTINATION ${CMAKE_INSTALL_DATADIR}/atom_sim/data)
 include(CTest)
 if(BUILD_TESTING)
     add_executable(screening_tests
@@ -66,7 +71,7 @@ if(BUILD_TESTING)
         src/Orbital.cpp
         src/RadialSampler.cpp
         src/Simulation.cpp)
-    target_include_directories(screening_tests PRIVATE include)
+    target_include_directories(screening_tests PRIVATE include "${CMAKE_CURRENT_BINARY_DIR}/generated")
     add_test(NAME screening_regressions COMMAND screening_tests)
     set_tests_properties(screening_regressions PROPERTIES
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -82,4 +87,28 @@ if(BUILD_TESTING)
         "-DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}"
         "-DTEST_DIR=${CMAKE_CURRENT_BINARY_DIR}"
         -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/ConsoleTests.cmake")
+endif()
+
+if(BUILD_TESTING)
+    add_test(NAME installation_regressions COMMAND ${CMAKE_COMMAND}
+        "-DBUILD_DIR=${CMAKE_CURRENT_BINARY_DIR}"
+        "-DBIN_DIR=${CMAKE_INSTALL_BINDIR}"
+        "-DDATA_DIR=${CMAKE_INSTALL_DATADIR}"
+        "-DCONFIG=$<CONFIG>"
+        "-DBINARY_NAME=$<TARGET_FILE_NAME:atom_sim>"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/InstallationTests.cmake")
+endif()
+
+if(BUILD_TESTING AND HAS_GL AND glm_FOUND)
+    find_path(EGL_INCLUDE_DIR EGL/egl.h)
+    find_library(EGL_LIBRARY EGL)
+    if(EGL_INCLUDE_DIR AND EGL_LIBRARY)
+        add_executable(shader_tests tests/ShaderTests.cpp src/ShaderProgram.cpp)
+        target_include_directories(shader_tests PRIVATE include ${EGL_INCLUDE_DIR})
+        target_link_libraries(shader_tests PRIVATE OpenGL::GL GLEW::GLEW ${EGL_LIBRARY})
+        add_test(NAME shader_regressions COMMAND shader_tests)
+        set_tests_properties(shader_regressions PROPERTIES
+            SKIP_RETURN_CODE 77
+            ENVIRONMENT "EGL_PLATFORM=surfaceless;LIBGL_ALWAYS_SOFTWARE=1")
+    endif()
 endif()

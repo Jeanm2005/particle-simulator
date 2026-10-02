@@ -67,8 +67,7 @@ void Simulation::writeCloudXYZ(const SimulationResult& result,
                                const std::string& filename) const {
     std::ofstream out(filename);
     if (!out) {
-        std::cerr << "Failed to open " << filename << " for writing\n";
-        return;
+        throw std::runtime_error("Failed to open " + filename + " for writing");
     }
 
     out << result.points.size() << "\n";
@@ -79,6 +78,8 @@ void Simulation::writeCloudXYZ(const SimulationResult& result,
     out << std::fixed << std::setprecision(6);
     for (const auto& p : result.points)
         out << "e  " << p[0] << "  " << p[1] << "  " << p[2] << "\n";
+    out.close();
+    if (!out) throw std::runtime_error("Failed to finish writing " + filename);
 }
 
 void Simulation::printRadialHistogram(const SimulationResult& result,

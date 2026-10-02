@@ -16,7 +16,9 @@ struct Element {
 
 class ElementDatabase {
 public:
-    explicit ElementDatabase(const std::string& jsonPath = "data/elements.json");
+    // An explicit JSON path bypasses automatic discovery.
+    explicit ElementDatabase(const std::string& jsonPath = "",
+                             const std::string& executablePath = "");
 
     std::optional<Element> findBySymbol(const std::string& symbol) const;
     std::optional<Element> findByZ(int Z) const;

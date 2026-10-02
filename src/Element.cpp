@@ -6,6 +6,9 @@
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
+#include <filesystem>
+#include <cstdlib>
+#include "DataPaths.hpp"
 
 namespace qm {
 
@@ -69,15 +72,64 @@ std::string extractValue(const std::string& obj, const std::string& key) {
 
 } // anonymous namespace
 
-ElementDatabase::ElementDatabase(const std::string& jsonPath) {
-    if (!loadFromJson(jsonPath)) {
-        std::cerr << "[ElementDatabase] Could not load \"" << jsonPath
-                  << "\" – using small built-in fallback table.\n";
-        loadFallback();
+ElementDatabase::ElementDatabase(const std::string& jsonPath,
+                                 const std::string& executablePath) {
+    namespace fs = std::filesystem;
+    std::vector<fs::path> candidates;
+    if (!jsonPath.empty()) {
+        candidates.emplace_back(jsonPath);
     } else {
-        std::cerr << "[ElementDatabase] Loaded " << elements_.size()
-                  << " elements from " << jsonPath << "\n";
+        if (const char* overrideDirectory = std::getenv("QM_DATA_DIR"))
+            candidates.push_back(fs::path(overrideDirectory) / "elements.json");
+        candidates.emplace_back("data/elements.json");
+        if (!executablePath.empty()) {
+            fs::path executable(executablePath);
+            std::error_code error;
+            if (!executable.has_parent_path()) {
+                // argv[0] may be a bare name when launched through PATH.
+                if (const char* searchPath = std::getenv("PATH")) {
+                    std::istringstream paths(searchPath);
+                    std::string directory;
+#ifdef _WIN32
+                    const char separator = ';';
+#else
+                    const char separator = ':';
+#endif
+                    while (std::getline(paths, directory, separator)) {
+                        fs::path candidate = fs::path(directory) / executable;
+                        if (fs::is_regular_file(candidate, error)) {
+                            executable = candidate;
+                            break;
+                        }
+                        error.clear();
+                    }
+                }
+            }
+            const fs::path resolved = fs::canonical(executable, error);
+            if (!error) {
+                candidates.push_back(resolved.parent_path() / QM_INSTALL_DATA_FROM_BIN / "elements.json");
+            }
+        }
+        candidates.push_back(fs::path(QM_INSTALL_DATA_DIR) / "elements.json");
+        candidates.push_back(fs::path(QM_SOURCE_DATA_DIR) / "elements.json");
     }
+    for (const auto& candidate : candidates) {
+        elements_.clear();
+        try {
+            if (loadFromJson(candidate.string())) {
+                std::cerr << "[ElementDatabase] Loaded " << elements_.size()
+                          << " elements from " << candidate.lexically_normal().string() << "\n";
+                return;
+            }
+        } catch (const std::exception& error) {
+            std::cerr << "[ElementDatabase] Invalid data in " << candidate.string()
+                      << ": " << error.what() << "\n";
+        }
+    }
+    std::cerr << "[ElementDatabase] Could not load element data"
+              << (jsonPath.empty() ? "" : " from " + jsonPath)
+              << " – using small built-in fallback table.\n";
+    loadFallback();
 }
 
 bool ElementDatabase::loadFromJson(const std::string& path) {

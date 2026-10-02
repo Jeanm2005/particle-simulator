@@ -1,149 +1,107 @@
-
----
-
-### `AGENTS.md`
-
-```markdown
 # AGENTS.md — collaboration notes for humans and AI agents
-
-This file orients **developers** and **coding agents** working on the Quantum Atom Simulator.
 
 ## Project location
 
-- Canonical working tree (this machine / user): `~/havefun/atoms` or the repo root after clone  
-- Sandbox / CI style path may appear as `/home/workdir/artifacts/atoms`  
-- Always run the binary from the **repo root** so `data/elements.json` resolves
+- Canonical working tree: `~/havefun/atoms`, or the repository root after cloning.
+- Sandbox / CI paths may use `/home/workdir/artifacts/atoms`.
+- Run development checks from the repository root. Default data discovery also
+  supports installed binaries and development runs from other directories.
+- Read this file and README.md before large refactors.
 
-## What this project is
+## Project
 
-C++17 quantum orbital visualiser:
+C++17 quantum orbital visualiser with hydrogenic radial/angular wavefunctions,
+CDF sampling, nuclear Z or configuration-based Slater screening, and GLFW +
+OpenGL 3.3 point-cloud and fragment-shader ray-march rendering.
 
-- Physics: hydrogenic \(R_{nl}\), \(Y_l^m\), CDF sampling, \(Z\) / Slater \(Z_\text{eff}\)
-- Rendering: GLFW + OpenGL 3.3 (point cloud + fragment-shader ray march)
-- Data: `data/elements.json`
-- Reference inspiration: [kavan010/Atoms](https://github.com/kavan010/Atoms)
+Element records live in `data/elements.json`. Reference inspiration:
+[kavan010/Atoms](https://github.com/kavan010/Atoms).
 
-## Hard requirements vs optional
+## Requirements
 
-| Item | Priority |
-|------|----------|
-| Correct Schrödinger sampling + multi-element \(Z\) | Required |
-| OpenGL point cloud + camera + live \(n,l,m\) | Required |
-| Probability-current animation | Required (done; keep working) |
-| GPU raytracer path | Required (done; improve over time) |
-| **CUDA acceleration** | **Required next milestone** (not optional) |
-| Agentic AI workflow (this file, PR bots, etc.) | Optional |
-| 2D Bohr model | Out of scope (explicitly skipped) |
+| Item | Priority / status |
+|------|-------------------|
+| Correct Schrödinger sampling and multi-element Z | Required; implemented |
+| OpenGL point cloud, camera, live n/l/m | Required; implemented |
+| Probability-current animation | Required; implemented; preserve radius and Y |
+| GPU ray-march path | Required; implemented; accuracy improvements remain |
+| CUDA acceleration | Required next milestone; not implemented |
+| Agentic workflow helpers | Optional |
+| 2D Bohr model | Out of scope |
 
-## CUDA milestone (required)
+## CUDA milestone
 
 Implement under `cuda/`:
 
-1. **Sampling kernels** — parallel inverse-CDF or rejection sampling for large \(N\)  
-2. **Flow update kernel** — `probabilityCurrentVelocity` on GPU for all particles  
-3. **CMake** — `option(QM_ENABLE_CUDA ...)` + `enable_language(CUDA)` when toolkit present  
-4. **Fallback** — CPU path must still build and run without CUDA  
+1. Parallel inverse-CDF or rejection sampling for large particle counts.
+2. GPU probability-current updates that preserve radius and height.
+3. `QM_ENABLE_CUDA` CMake option and CUDA language detection when available.
+4. CPU fallback when CUDA is unavailable; retain the CPU OpenGL path.
+5. Numerical parity checks and performance measurements.
 
-Do not remove the CPU OpenGL path when adding CUDA.
+There is no CUDA directory or build option yet. Keep README status accurate.
 
-## Architecture rules
+## Architecture and physics
 
-- Physics stays in `QuantumMath`, `RadialSampler`, `Simulation` — no OpenGL includes there  
-- Rendering stays in `Engine` / `Camera`  
-- Prefer C++17, CMake 3.16+, no single-file monolith  
-- Do not hardcode \(\pi\); use `qm::PI` from `Constants.hpp`  
-- Element tables live in JSON, not hardcoded arrays (fallback table only for offline emergency)
+- Physics stays in QuantumMath, RadialSampler, and Simulation; no OpenGL includes.
+- Rendering stays in Engine and Camera.
+- Use C++17 and CMake 3.16+; keep the modular layout.
+- Use `qm::PI` from Constants.hpp; do not duplicate the constant.
+- Element tables belong in JSON; the small built-in table is an emergency fallback.
+- Coordinates use a0 and Y as the polar axis in both console and visual modes.
+- Slater screening requires an expanded neutral configuration and an occupied
+  Slater group. Unoccupied groups and unknown configurations require pure Z.
+- Reject invalid inputs and nonfinite distributions before sampling.
+- Preserve `QM_HAS_OPENGL` guards so console builds need no graphics dependencies.
 
-## Build / test checklist for agents
+## Build and test
 
 ```bash
-cmake -B build -S .
+cmake -S . -B build
 cmake --build build
-./build/atom_sim --console   # must work without display
-# optional if GL works:
+ctest --test-dir build --output-on-failure
+./build/atom_sim --console
+# Optional when a display and graphics context are available:
 ./build/atom_sim --visual
-
-Console regression: input H, 1s, p → finite $\langle r \rangle$, writes H_1s_cloud.xyz.
-Common environment issues
-
-WSL + GLEW failed: software GL (LIBGL_ALWAYS_SOFTWARE=1) or native Windows build
-Old banner / no window: stale binary — rm -rf build && cmake -B build && cmake --build build
-m must be integer with $|m| \le l$
-
-Optional agentic AI workflow
-These are optional process helpers, not product features:
-
-Issue-driven tasks — one milestone per issue (e.g. “CUDA particle update kernel”)
-Agent commits — small diffs; never rewrite unrelated modules in the same PR
-AGENTS.md + README — keep roadmap and constraints in sync when behaviour changes
-CI (future) — Linux build job: configure without CUDA, run --console smoke test
-Code review prompts — check physics units (a0), polar axis convention (Y-up), and that QM_HAS_OPENGL guards remain correct
-
-Agents should prefer reading this file and README.md before large refactors.
-
-File ownership (rough)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-AreaPrimary filesWavefunctions / currentQuantumMath.*SamplingRadialSampler.*Console I/O + XYZSimulation.*, main.cppOpenGL / flow / raytraceEngine.*, Camera.hppElementsElement.*, data/elements.jsonCUDAcuda/*, CMake CUDA option
-Reference mapping (kavan010/Atoms)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-Their ideaOur locationLaguerre recurrence samplingQuantumMath::associatedLaguerre, CDF in RadialSamplerReal-time point cloudEngine point pathRaytracerEngine::createRaytraceShaders / drawRaytraceProbability flowprobabilityCurrentVelocity + Engine::updateParticlesHydrogen-onlyExtended to any $Z$ via element DB + Slater
+```
+
+Console smoke input: H, 1s, p. Expect finite mean radius near 1.5 a0 and
+`H_1s_cloud.xyz`. Gold, 6s, s must also complete with Zeff = 3.7.
+
+Check the CPU fallback with `-DCMAKE_DISABLE_FIND_PACKAGE_OpenGL=ON` in a separate
+build directory. Regression suites cover screening, sampling, flow, coordinates,
+input parsing, relocated installations, and export failures. Offscreen shader
+checks run when EGL is available. Other graphics runtime checks require a working
+context; report when they cannot be performed.
+
+For WSL graphics problems, try software GL with `LIBGL_ALWAYS_SOFTWARE=1`.
+For a suspected stale binary, configure a fresh build directory and rebuild.
+
+## Workflow
+
+- Complete, verify, and commit each agreed step; report the hash for the user to push.
+- Keep commits focused and avoid unrelated rewrites.
+- Keep README and these instructions synchronized when behavior changes.
+- Optional future CI: configure without CUDA and run console / CTest regressions.
+
+## File ownership
+
+| Area | Primary files |
+|------|---------------|
+| Wavefunctions / current | QuantumMath.* |
+| Sampling | RadialSampler.* |
+| Console / XYZ | Simulation.*, main.cpp |
+| Rendering / camera | Engine.*, Camera.hpp, ShaderProgram.* |
+| Elements / discovery | Element.*, data/elements.json, cmake/DataPaths.hpp.in |
+| CUDA (planned) | cuda/*, CMakeLists.txt |
+| Regressions | tests/* |
+
+## Reference mapping
+
+| Reference idea | Implementation |
+|----------------|----------------|
+| Laguerre recurrence sampling | QuantumMath::associatedLaguerre, RadialSampler CDF |
+| Point cloud | Engine point path |
+| Raytracer | Engine::createRaytraceShaders / drawRaytrace |
+| Probability flow | probabilityCurrentVelocity, advanceProbabilityCurrent |
+| Hydrogen-only model | Extended through element JSON and Slater screening |

@@ -95,52 +95,112 @@ Run the screening and sampling regressions with `ctest --test-dir build --output
 
 ## Build
 
+From the repository root, using CMake 3.16+ and a C++17 compiler:
+
 ```bash
-# Debian / Ubuntu / WSL
+# Debian / Ubuntu / WSL dependencies for the viewer
 sudo apt install build-essential cmake \
   libglfw3-dev libglew-dev libglm-dev libgl1-mesa-dev
 
-mkdir build && cd build
-cmake ..
-cmake --build .
+cmake -S . -B build
+cmake --build build
+ctest --test-dir build --output-on-failure
+```
 
-Run
-Bash# from project root so data/elements.json is found
+The test suite includes offscreen shader regressions when EGL is available;
+those checks are skipped if an offscreen context cannot be created.
+
+When graphics dependencies are missing, CMake builds console mode. To explicitly
+check that fallback:
+
+```bash
+cmake -S . -B build-console -DCMAKE_DISABLE_FIND_PACKAGE_OpenGL=ON
+cmake --build build-console
+ctest --test-dir build-console --output-on-failure
+```
+
+## Run
+
+```bash
 ./build/atom_sim --visual
 ./build/atom_sim --console
+```
 
-WSL / no GPU
-Bashexport LIBGL_ALWAYS_SOFTWARE=1
+Both modes prompt for the element, orbital, and screening choice. Nonspherical
+orbitals also prompt for integer m. Running without an option prompts for the mode
+when graphics support is compiled. `--help` lists the command-line options.
+XYZ output is written to the current directory in atomic units (a0). Failure to
+open or finish writing the file returns a nonzero exit status. Viewer startup
+also returns a nonzero exit status if context creation, shader compilation, or
+shader linking fails.
+
+### Install and element data
+
+```bash
+cmake --install build --prefix "$HOME/.local"
+"$HOME/.local/bin/atom_sim" --console
+```
+
+The database searches these locations in order:
+
+1. `QM_DATA_DIR/elements.json`, when the environment variable is set.
+2. `data/elements.json` relative to the current directory.
+3. The installed data directory relative to the executable (also after relocating
+   an installation or launching through PATH).
+4. The installation data directory configured by CMake.
+5. The source tree's data directory, for development builds.
+
+If none loads, the program prints a warning and uses its six-element emergency
+table. An explicit path supplied to `ElementDatabase` bypasses automatic discovery.
+
+### WSL / software graphics
+
+```bash
+export LIBGL_ALWAYS_SOFTWARE=1
 export GALLIUM_DRIVER=llvmpipe
 ./build/atom_sim --visual
-If GLEW still fails, use --console and open the .xyz file in Ovito or VMD.
+```
 
-Layout
-textCopyCopiedatoms/
+If graphics initialization still fails, use console mode and import the XYZ file
+into a viewer that supports particle clouds. Coordinates are in a0; convert to
+angstroms when needed using the factor in `Constants.hpp`.
+
+## Layout
+
+```text
+atoms/
 ├── CMakeLists.txt
 ├── README.md
-├── AGENTS.md              # notes for human + AI collaborators
-├── data/elements.json     # Z = 1 … 119
-├── include/               # public headers
-├── src/                   # implementations
-└── cuda/                  # CUDA kernels (in progress)
-Roadmap
-Required next: CUDA
+├── AGENTS.md
+├── cmake/                # generated data-path configuration template
+├── data/elements.json    # entries Z = 1 … 119
+├── include/              # public headers
+├── src/                  # implementations
+└── tests/                # physics, input, and installation regressions
+```
 
-Parallel radial/angular CDF construction and sampling on GPU
-Parallel particle position updates under probability current
-Optional dense volume evaluation for the raytracer
-CMake flag -DQM_ENABLE_CUDA=ON and graceful CPU fallback
+The dataset includes an entry for Z = 119. Its scientific metadata and the other
+element records still need a provenance review.
 
-See cuda/README_CUDA.md and AGENTS.md.
-Later
+## Roadmap
 
-Multi-orbital display
-Better raytracer adaptive stepping
-Native Windows MSVC build instructions
+- [x] Fix screening, validate finite distributions, and cover the crash with tests.
+- [x] Fix C++17 portability, input parsing, coordinates, and probability flow.
+- [x] Repair documentation, installed data discovery, and export/shader errors.
+- [ ] Implement CUDA sampling and flow kernels with CPU fallback and parity tests.
+- [ ] Improve ray-march bounds, stepping, opacity, and camera consistency; benchmark.
 
-Accuracy
+CUDA is the required next milestone. It has not been implemented: there is no
+`cuda/` directory or `QM_ENABLE_CUDA` option yet. The milestone will add parallel
+sampling and particle updates while preserving the CPU OpenGL path. Optional
+GPU volume evaluation can follow.
 
-Exact for one-electron ions (H, He⁺, Li²⁺, …)
-Approximate for multi-electron atoms (screening via $Z_\text{eff}$)
-For quantitative chemistry use Hartree–Fock / DFT packages
+Later work includes multi-orbital display, scientific data provenance, automated
+CI, and native Windows build instructions.
+
+## Accuracy
+
+Hydrogenic wavefunctions are exact for the nonrelativistic one-electron model.
+Multi-electron screening is approximate. Ray-march rendering is currently a
+visual approximation with fixed stepping and normalization limitations. For
+quantitative chemistry, use a suitable Hartree–Fock or DFT package.

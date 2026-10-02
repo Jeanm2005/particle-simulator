@@ -28,6 +28,8 @@ int main() {
     try {
         qm::ElementDatabase database;
         require(database.size() == 119, "Regression test requires full element JSON");
+        qm::ElementDatabase missing("nonexistent-test-elements.json");
+        require(missing.size() == 6, "Explicit missing path must use emergency fallback");
         auto gold = database.findByZ(79).value();
         near(qm::slaterZeff(79, 6, 0, gold.config), 3.7);
         near(qm::slaterZeff(1, 1, 0, "1s1"), 1.0);

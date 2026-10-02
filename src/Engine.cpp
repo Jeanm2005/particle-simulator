@@ -1,11 +1,13 @@
 #include "Engine.hpp"
 #include "Orbital.hpp"
 #include "Constants.hpp"
+#include "ShaderProgram.hpp"
 
 #include <iostream>
 #include <sstream>
 #include <cmath>
 #include <algorithm>
+#include <stdexcept>
 
 namespace qm {
 
@@ -36,57 +38,42 @@ static float intensityAt(const glm::vec3& p, int n, int l, int m, double Z) {
     return static_cast<float>(R * R * ang);
 }
 
-static GLuint compileShader(GLenum type, const char* src) {
-    GLuint s = glCreateShader(type);
-    glShaderSource(s, 1, &src, nullptr);
-    glCompileShader(s);
-    GLint ok = 0;
-    glGetShaderiv(s, GL_COMPILE_STATUS, &ok);
-    if (!ok) {
-        char log[1024];
-        glGetShaderInfoLog(s, 1024, nullptr, log);
-        std::cerr << "Shader error: " << log << "\n";
-    }
-    return s;
-}
-
-static GLuint linkProgram(GLuint vs, GLuint fs) {
-    GLuint p = glCreateProgram();
-    glAttachShader(p, vs);
-    glAttachShader(p, fs);
-    glLinkProgram(p);
-    glDeleteShader(vs);
-    glDeleteShader(fs);
-    return p;
-}
-
 Engine::Engine(int width, int height)
     : width_(width), height_(height)
 {
-    if (!glfwInit()) { std::cerr << "GLFW init failed\n"; std::exit(1); }
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    if (!glfwInit()) throw std::runtime_error("GLFW initialization failed");
+    try {
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    window_ = glfwCreateWindow(width_, height_, "Quantum Atom Visualiser", nullptr, nullptr);
-    if (!window_) { std::cerr << "Window failed\n"; glfwTerminate(); std::exit(1); }
-    glfwMakeContextCurrent(window_);
-    glfwSetWindowUserPointer(window_, this);
-    glfwSetKeyCallback(window_, keyCallback);
-    glfwSetMouseButtonCallback(window_, mouseButtonCallback);
-    glfwSetCursorPosCallback(window_, cursorPosCallback);
-    glfwSetScrollCallback(window_, scrollCallback);
-    glfwSetFramebufferSizeCallback(window_, framebufferSizeCallback);
+        window_ = glfwCreateWindow(width_, height_, "Quantum Atom Visualiser", nullptr, nullptr);
+        if (!window_) throw std::runtime_error("OpenGL window creation failed");
+        glfwMakeContextCurrent(window_);
+        glfwSetWindowUserPointer(window_, this);
+        glfwSetKeyCallback(window_, keyCallback);
+        glfwSetMouseButtonCallback(window_, mouseButtonCallback);
+        glfwSetCursorPosCallback(window_, cursorPosCallback);
+        glfwSetScrollCallback(window_, scrollCallback);
+        glfwSetFramebufferSizeCallback(window_, framebufferSizeCallback);
 
-    if (glewInit() != GLEW_OK) { std::cerr << "GLEW failed\n"; std::exit(1); }
+        if (glewInit() != GLEW_OK) throw std::runtime_error("GLEW initialization failed");
 
-    initGL();
-    createPointShaders();
-    createRaytraceShaders();
-    lastTime_ = glfwGetTime();
+        initGL();
+        createPointShaders();
+        createRaytraceShaders();
+        lastTime_ = glfwGetTime();
+    } catch (...) {
+        releaseGL();
+        throw;
+    }
 }
 
 Engine::~Engine() {
+    releaseGL();
+}
+
+void Engine::releaseGL() noexcept {
     if (vbo_) glDeleteBuffers(1, &vbo_);
     if (vao_) glDeleteVertexArrays(1, &vao_);
     if (pointShader_) glDeleteProgram(pointShader_);
@@ -148,11 +135,10 @@ void main() {
     vec2 c = gl_PointCoord - vec2(0.5);
     float d = length(c);
     if (d > 0.5) discard;
-    float alpha = smoothstep(0.5, 0.15, d);
+    float alpha = 1.0 - smoothstep(0.15, 0.5, d);
     FragColor = vec4(vColor, alpha * 0.9);
 })";
-    pointShader_ = linkProgram(compileShader(GL_VERTEX_SHADER, vs),
-                               compileShader(GL_FRAGMENT_SHADER, fs));
+    pointShader_ = createShaderProgram(vs, fs);
     uView_      = glGetUniformLocation(pointShader_, "uView");
     uProj_      = glGetUniformLocation(pointShader_, "uProj");
     uPointSize_ = glGetUniformLocation(pointShader_, "uPointSize");
@@ -280,8 +266,7 @@ void main() {
     FragColor = vec4(col, 1.0);
 })";
 
-    rtShader_ = linkProgram(compileShader(GL_VERTEX_SHADER, vs),
-                            compileShader(GL_FRAGMENT_SHADER, fs));
+    rtShader_ = createShaderProgram(vs, fs);
     rtCamPos_   = glGetUniformLocation(rtShader_, "uCamPos");
     rtCamFwd_   = glGetUniformLocation(rtShader_, "uCamFwd");
     rtCamRight_ = glGetUniformLocation(rtShader_, "uCamRight");

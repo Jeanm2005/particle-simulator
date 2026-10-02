@@ -38,6 +38,7 @@ public:
     void run(const Element& element, int n, int l, int m, bool useSlater);
 
 private:
+    void releaseGL() noexcept;
     void initGL();
     void createPointShaders();
     void createRaytraceShaders();

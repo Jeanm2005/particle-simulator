@@ -57,7 +57,7 @@ static int run(int argc, char** argv) {
               << "  Exact hydrogenic orbitals  |  any element\n"
               << "========================================================\n\n";
 
-    ElementDatabase db;
+    ElementDatabase db("", argv[0]);
 
     std::cout << "Enter element symbol (e.g. C, Fe, Au) or atomic number: ";
     const std::string input = readToken();
