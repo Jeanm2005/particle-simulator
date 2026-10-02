@@ -3,6 +3,10 @@
 
 #include <cmath>
 #include <algorithm>
+#include <sstream>
+#include <regex>
+#include <map>
+#include <stdexcept>
 
 namespace qm {
 
@@ -97,15 +101,52 @@ double hydrogenicEnergy(int n, double Z) {
     return -RYDBERG_EV * Z * Z / (n * n);
 }
 
-double slaterZeff(int Z, int n, int /*l*/) {
-    if (n == 1)
-        return Z - 0.30 * (Z > 1 ? 1.0 : 0.0);
-    if (n == 2) {
-        const double core = std::min(static_cast<double>(Z - 2), 2.0);
-        const double same = std::max(0.0, static_cast<double>(Z - 4));
-        return Z - 0.85 * core - 0.35 * same;
+double slaterZeff(int Z, int n, int l, const std::string& configuration) {
+    if (Z < 1 || n < 1 || l < 0 || l >= n)
+        throw std::invalid_argument("Invalid atomic number or quantum numbers for screening");
+
+    // Slater groups combine ns and np; nd, nf, ... are separate groups.
+    std::map<std::pair<int, int>, int> groups;
+    std::istringstream input(configuration);
+    const std::regex orbital(R"((\d+)([spdfgh])(\d+))");
+    std::string token;
+    int electrons = 0;
+    while (input >> token) {
+        std::smatch match;
+        if (!std::regex_match(token, match, orbital))
+            throw std::invalid_argument("Screening requires an expanded electron configuration; use pure Z instead");
+        int shell = std::stoi(match[1].str());
+        int angular = static_cast<int>(std::string("spdfgh").find(match[2].str()));
+        int count = std::stoi(match[3].str());
+        if (shell < 1 || shell > 100 || angular >= shell || count < 1 || count > 2 * (2 * angular + 1))
+            throw std::invalid_argument("Invalid electron configuration for screening");
+        groups[{shell, angular <= 1 ? 0 : angular}] += count;
+        electrons += count;
     }
-    return Z - 0.85 * (Z - 2) - 0.35 * std::max(0, Z - 10);
+    if (electrons != Z)
+        throw std::invalid_argument("Screening requires a neutral electron configuration matching Z");
+
+    const std::pair<int, int> target{n, l <= 1 ? 0 : l};
+    if (groups.find(target) == groups.end())
+        throw std::invalid_argument("Selected Slater group is unoccupied; use pure Z for this orbital");
+
+    double shielding = 0.0;
+    for (const auto& entry : groups) {
+        const int shell = entry.first.first;
+        int count = entry.second;
+        if (entry.first == target) {
+            shielding += (count - 1) * (n == 1 ? 0.30 : 0.35);
+        } else if (l <= 1) {
+            if (shell == n - 1) shielding += 0.85 * count;
+            else if (shell < n - 1) shielding += count;
+        } else if (entry.first < target) {
+            shielding += count;
+        }
+    }
+    const double effective = Z - shielding;
+    if (!std::isfinite(effective) || effective <= 0.0)
+        throw std::domain_error("Screening produced a nonpositive or nonfinite effective charge");
+    return effective;
 }
 
 void probabilityCurrentVelocity(double x, double /*y*/, double z, int m,

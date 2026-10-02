@@ -76,6 +76,17 @@ This project extends that direction with:
 
 - Energy: \(E_n = -13.6\,Z^2/n^2\) eV (exact for one-electron ions)
 
+## Screening and validation
+
+Slater screening follows [the grouped shielding rules](https://lampz.tugraz.at/~hadley/ss1/molecules/atoms/slater.php)
+and uses the expanded neutral electron configuration in the element
+JSON. The selected ns/np, nd, or nf group must be occupied. For unoccupied groups
+or custom elements without a configuration, select pure Z instead. Screening is
+an approximation; it does not model excited-state electron rearrangements.
+Invalid sampler parameters and nonfinite distributions are rejected with errors.
+
+Run the screening and sampling regressions with `ctest --test-dir build --output-on-failure`.
+
 ## Build
 
 ```bash

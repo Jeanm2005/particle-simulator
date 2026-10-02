@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <stdexcept>
 
 namespace qm {
 
@@ -12,9 +13,15 @@ RadialSampler::RadialSampler(int n, int l, double Z, int nBins) {
 }
 
 void RadialSampler::rebuild(int n, int l, double Z, int nBins) {
+    cdf_.clear();
+    rGrid_.clear();
+    if (n < 1 || l < 0 || l >= n || nBins < 2 || !std::isfinite(Z) || Z <= 0.0)
+        throw std::invalid_argument("Invalid radial sampler parameters");
     n_ = n; l_ = l; Z_ = Z;
-    rMax_ = 15.0 * n * n / std::max(Z, 0.5);
+    rMax_ = 15.0 * n * static_cast<double>(n) / Z;
 
+    if (!std::isfinite(rMax_) || rMax_ <= 0.0)
+        throw std::domain_error("Invalid radial sampling range");
     rGrid_.assign(nBins, 0.0);
     cdf_.assign(nBins, 0.0);
 
@@ -27,11 +34,15 @@ void RadialSampler::rebuild(int n, int l, double Z, int nBins) {
         sum += radialPdf(n, l, r, Z) * dr;
         cdf_[i] = sum;
     }
-    if (sum > 0.0)
-        for (auto& c : cdf_) c /= sum;
+    if (!std::isfinite(sum) || sum <= 0.0) {
+        cdf_.clear();
+        throw std::domain_error("Cannot normalize sampling distribution");
+    }
+    for (auto& c : cdf_) c /= sum;
 }
 
 double RadialSampler::sample(std::mt19937& gen) const {
+    if (!ready()) throw std::logic_error("Sampler has no valid distribution");
     std::uniform_real_distribution<double> uni(0.0, 1.0);
     const double u = uni(gen);
     auto it = std::lower_bound(cdf_.begin(), cdf_.end(), u);
@@ -45,6 +56,10 @@ AngularSampler::AngularSampler(int l, int m, int nBins) {
 }
 
 void AngularSampler::rebuild(int l, int m, int nBins) {
+    cdf_.clear();
+    thetaGrid_.clear();
+    if (l < 0 || m < -l || m > l || nBins < 2)
+        throw std::invalid_argument("Invalid angular sampler parameters");
     l_ = l; m_ = m;
     thetaGrid_.assign(nBins, 0.0);
     cdf_.assign(nBins, 0.0);
@@ -58,11 +73,15 @@ void AngularSampler::rebuild(int l, int m, int nBins) {
         sum += angularPdf(l, m, theta) * std::sin(theta) * dtheta;
         cdf_[i] = sum;
     }
-    if (sum > 0.0)
-        for (auto& c : cdf_) c /= sum;
+    if (!std::isfinite(sum) || sum <= 0.0) {
+        cdf_.clear();
+        throw std::domain_error("Cannot normalize sampling distribution");
+    }
+    for (auto& c : cdf_) c /= sum;
 }
 
 double AngularSampler::sample(std::mt19937& gen) const {
+    if (!ready()) throw std::logic_error("Sampler has no valid distribution");
     std::uniform_real_distribution<double> uni(0.0, 1.0);
     const double u = uni(gen);
     auto it = std::lower_bound(cdf_.begin(), cdf_.end(), u);

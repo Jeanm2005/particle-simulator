@@ -57,3 +57,17 @@ endif()
 
 install(TARGETS atom_sim DESTINATION bin)
 install(DIRECTORY data/ DESTINATION share/atom_sim/data)
+include(CTest)
+if(BUILD_TESTING)
+    add_executable(screening_tests
+        tests/ScreeningTests.cpp
+        src/Element.cpp
+        src/QuantumMath.cpp
+        src/Orbital.cpp
+        src/RadialSampler.cpp
+        src/Simulation.cpp)
+    target_include_directories(screening_tests PRIVATE include)
+    add_test(NAME screening_regressions COMMAND screening_tests)
+    set_tests_properties(screening_regressions PROPERTIES
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+endif()

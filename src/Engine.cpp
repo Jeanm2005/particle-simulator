@@ -294,7 +294,7 @@ void main() {
 }
 
 void Engine::generateParticles() {
-    Zeff_ = useSlater_ ? slaterZeff(element_.Z, n_, l_)
+    Zeff_ = useSlater_ ? slaterZeff(element_.Z, n_, l_, element_.config)
                        : static_cast<double>(element_.Z);
 
     radial_.rebuild(n_, l_, Zeff_);

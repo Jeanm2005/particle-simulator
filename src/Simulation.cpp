@@ -7,6 +7,7 @@
 #include <iomanip>
 #include <cmath>
 #include <algorithm>
+#include <stdexcept>
 
 namespace qm {
 
@@ -22,14 +23,18 @@ Simulation::Simulation(const Element& element,
 {}
 
 SimulationResult Simulation::run() {
+    if (element_.Z < 1 || nSamples_ <= 0)
+        throw std::invalid_argument("Atomic number and sample count must be positive");
     SimulationResult result;
     result.qn = {n_, l_, m_};
 
     result.Zeff = useSlater_
-                  ? slaterZeff(element_.Z, n_, l_)
+                  ? slaterZeff(element_.Z, n_, l_, element_.config)
                   : static_cast<double>(element_.Z);
 
     result.energy_eV = hydrogenicEnergy(n_, result.Zeff);
+    if (!std::isfinite(result.energy_eV))
+        throw std::domain_error("Nonfinite orbital energy");
 
     RadialSampler  radial(n_, l_, result.Zeff);
     AngularSampler angular(l_, m_);
@@ -53,6 +58,8 @@ SimulationResult Simulation::run() {
     }
 
     result.meanRadius_a0 = sumR / nSamples_;
+    if (!std::isfinite(result.meanRadius_a0))
+        throw std::domain_error("Nonfinite sampled radius");
     return result;
 }
 

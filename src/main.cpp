@@ -117,7 +117,13 @@ int main(int argc, char** argv) {
 
     const int N_SAMPLES = 50000;
     Simulation sim(*elem, n, l, m, useSlater, N_SAMPLES);
-    auto result = sim.run();
+    SimulationResult result;
+    try {
+        result = sim.run();
+    } catch (const std::exception& ex) {
+        std::cerr << "Simulation error: " << ex.what() << "\n";
+        return 1;
+    }
 
     std::cout << "\n--- Results ---\n"
               << "Quantum numbers : n=" << result.qn.n
