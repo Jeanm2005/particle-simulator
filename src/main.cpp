@@ -11,6 +11,7 @@
 #include <iomanip>
 #include <string>
 #include <cstdlib>
+#include <stdexcept>
 
 static void printUsage(const char* argv0) {
     std::cout << "Usage:\n"
@@ -19,17 +20,36 @@ static void printUsage(const char* argv0) {
               << "  " << argv0 << " --console    console sampler only\n";
 }
 
-int main(int argc, char** argv) {
+static std::string readToken() {
+    std::string token;
+    if (!(std::cin >> token)) throw std::runtime_error("Input ended before setup was complete");
+    return token;
+}
+
+static std::optional<int> parseInteger(const std::string& token) {
+    try {
+        std::size_t consumed = 0;
+        int value = std::stoi(token, &consumed);
+        if (consumed == token.size()) return value;
+    } catch (const std::exception&) {}
+    return std::nullopt;
+}
+
+static int run(int argc, char** argv) {
     using namespace qm;
 
     bool forceVisual  = false;
     bool forceConsole = false;
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
-        if (a == "--visual")  forceVisual  = true;
-        if (a == "--console") forceConsole = true;
-        if (a == "-h" || a == "--help") { printUsage(argv[0]); return 0; }
+        if (a == "--visual") forceVisual = true;
+        else if (a == "--console") forceConsole = true;
+        else if (a == "-h" || a == "--help") { printUsage(argv[0]); return 0; }
+        else throw std::invalid_argument("Unknown option: " + a);
     }
+
+    if (forceVisual && forceConsole)
+        throw std::invalid_argument("Choose either --visual or --console");
 
     std::cout << std::fixed << std::setprecision(6);
     std::cout << "========================================================\n"
@@ -40,23 +60,24 @@ int main(int argc, char** argv) {
     ElementDatabase db;
 
     std::cout << "Enter element symbol (e.g. C, Fe, Au) or atomic number: ";
-    std::string input;
-    std::cin >> input;
-
+    const std::string input = readToken();
     std::optional<Element> elem;
-    try {
-        int Z = std::stoi(input);
-        elem = db.findByZ(Z);
-    } catch (...) {
+    const auto number = parseInteger(input);
+    if (number) {
+        if (*number < 1) throw std::invalid_argument("Atomic number must be positive");
+        elem = db.findByZ(*number);
+    } else {
+        if (input.find_first_of("0123456789+-") != std::string::npos)
+            throw std::invalid_argument("Atomic number must be a whole integer");
         elem = db.findBySymbol(input);
     }
 
     if (!elem) {
         std::cout << "Element not found. Enter custom Z: ";
-        int Z = 0;
-        std::cin >> Z;
-        if (Z < 1) { std::cerr << "Invalid Z\n"; return 1; }
-        elem = Element{Z, "X", "Custom", "unknown", 0.0};
+        const auto customZ = parseInteger(readToken());
+        if (!customZ || *customZ < 1)
+            throw std::invalid_argument("Custom Z must be a positive whole integer");
+        elem = Element{*customZ, "X", "Custom", "unknown", 0.0};
     }
 
     std::cout << "\nSelected: " << elem->name << " (" << elem->symbol
@@ -64,33 +85,36 @@ int main(int argc, char** argv) {
               << "Ground-state configuration: " << elem->config << "\n\n";
 
     std::cout << "Enter orbital (e.g. 1s, 2p, 3d, 4f): ";
-    std::string orbStr;
-    std::cin >> orbStr;
+    const std::string orbStr = readToken();
 
     auto parsed = parseOrbital(orbStr);
     int n = 1, l = 0;
     if (parsed) { n = parsed->first; l = parsed->second; }
-    else std::cerr << "Could not parse orbital – using 1s.\n";
+    else throw std::invalid_argument("Invalid orbital; use 1s through 7f with l < n");
 
     int m = 0;
     if (l > 0) {
         std::cout << "Enter m (-" << l << " … +" << l << "): ";
-        std::cin >> m;
-        if (std::abs(m) > l) { std::cerr << "Invalid m – using 0.\n"; m = 0; }
+        const auto enteredM = parseInteger(readToken());
+        if (!enteredM || *enteredM < -l || *enteredM > l)
+            throw std::invalid_argument("m must be a whole integer with |m| <= l");
+        m = *enteredM;
     }
 
-    std::cout << "Use pure Z or Slater Zeff? (p/s) [p]: ";
-    char choice = 'p';
-    std::cin >> choice;
-    bool useSlater = (choice == 's' || choice == 'S');
+    std::cout << "Use pure Z or Slater Zeff? (p/s): ";
+    const std::string choice = readToken();
+    if (choice != "p" && choice != "P" && choice != "s" && choice != "S")
+        throw std::invalid_argument("Screening choice must be p or s");
+    bool useSlater = (choice == "s" || choice == "S");
 
     bool visual = forceVisual;
     if (!forceVisual && !forceConsole) {
 #ifdef QM_HAS_OPENGL
-        std::cout << "\nMode: (v)isual OpenGL  or  (c)onsole sampler? [v]: ";
-        char mode = 'v';
-        std::cin >> mode;
-        visual = !(mode == 'c' || mode == 'C');
+        std::cout << "\nMode: (v)isual OpenGL  or  (c)onsole sampler? (v/c): ";
+        const std::string mode = readToken();
+        if (mode != "v" && mode != "V" && mode != "c" && mode != "C")
+            throw std::invalid_argument("Mode must be v or c");
+        visual = (mode == "v" || mode == "V");
 #else
         visual = false;
         std::cout << "\n(OpenGL support not compiled – console mode)\n";
@@ -140,4 +164,13 @@ int main(int argc, char** argv) {
     sim.printRadialHistogram(result);
 
     return 0;
+}
+
+int main(int argc, char** argv) {
+    try {
+        return run(argc, argv);
+    } catch (const std::exception& error) {
+        std::cerr << "Error: " << error.what() << "\n";
+        return 1;
+    }
 }

@@ -149,6 +149,23 @@ double slaterZeff(int Z, int n, int l, const std::string& configuration) {
     return effective;
 }
 
+void advanceProbabilityCurrent(double& x, double& z, int m, double dt) {
+    if (!std::isfinite(x) || !std::isfinite(z) || !std::isfinite(dt))
+        throw std::invalid_argument("Current update requires finite coordinates and time");
+    const double radiusSquared = x * x + z * z;
+    if (!std::isfinite(radiusSquared))
+        throw std::invalid_argument("Current update radius is too large");
+    if (m == 0 || radiusSquared < 1e-16 || dt == 0.0) return;
+    const double angle = (static_cast<double>(m) * dt) / radiusSquared;
+    if (!std::isfinite(angle))
+        throw std::invalid_argument("Current update angle is too large");
+    const double cosine = std::cos(angle);
+    const double sine = std::sin(angle);
+    const double oldX = x;
+    x = oldX * cosine - z * sine;
+    z = oldX * sine + z * cosine;
+}
+
 void probabilityCurrentVelocity(double x, double /*y*/, double z, int m,
                                 double& vx, double& vy, double& vz) {
     if (m == 0) {

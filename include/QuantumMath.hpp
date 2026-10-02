@@ -16,6 +16,9 @@ double hydrogenicEnergy(int n, double Z);
 // Screening requires an occupied Slater group in this neutral configuration.
 double slaterZeff(int Z, int n, int l, const std::string& configuration);
 
+// Exact current trajectory about the Y polar axis; time is in atomic units.
+void advanceProbabilityCurrent(double& x, double& z, int m, double dt);
+
 void probabilityCurrentVelocity(double x, double /*y*/, double z, int m,
                                 double& vx, double& vy, double& vz);
 

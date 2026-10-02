@@ -71,3 +71,15 @@ if(BUILD_TESTING)
     set_tests_properties(screening_regressions PROPERTIES
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
 endif()
+
+if(BUILD_TESTING)
+    add_executable(physics_tests tests/PhysicsTests.cpp
+        src/QuantumMath.cpp src/Orbital.cpp src/RadialSampler.cpp src/Simulation.cpp)
+    target_include_directories(physics_tests PRIVATE include)
+    add_test(NAME physics_regressions COMMAND physics_tests)
+    add_test(NAME console_regressions COMMAND ${CMAKE_COMMAND}
+        "-DATOM_SIM=$<TARGET_FILE:atom_sim>"
+        "-DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}"
+        "-DTEST_DIR=${CMAKE_CURRENT_BINARY_DIR}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/ConsoleTests.cmake")
+endif()

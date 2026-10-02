@@ -1,9 +1,7 @@
 #pragma once
 
 #include <cmath>
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
+#include "Constants.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -24,7 +22,7 @@ struct Camera {
     double lastX = 0.0, lastY = 0.0;
 
     glm::vec3 position() const {
-        const float el = std::clamp(elevation, 0.05f, static_cast<float>(M_PI) - 0.05f);
+        const float el = std::clamp(elevation, 0.05f, static_cast<float>(qm::PI) - 0.05f);
         return {
             radius * std::sin(el) * std::cos(azimuth),
             radius * std::cos(el),
@@ -46,7 +44,7 @@ struct Camera {
         if (dragging) {
             azimuth   += dx * orbitSpeed;
             elevation -= dy * orbitSpeed;
-            elevation  = std::clamp(elevation, 0.05f, static_cast<float>(M_PI) - 0.05f);
+            elevation  = std::clamp(elevation, 0.05f, static_cast<float>(qm::PI) - 0.05f);
         }
         lastX = x;
         lastY = y;

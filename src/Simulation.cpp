@@ -50,8 +50,8 @@ SimulationResult Simulation::run() {
         const double phi   = phiDist(gen_);
 
         const double x = r * std::sin(theta) * std::cos(phi);
-        const double y = r * std::sin(theta) * std::sin(phi);
-        const double z = r * std::cos(theta);
+        const double y = r * std::cos(theta);
+        const double z = r * std::sin(theta) * std::sin(phi);
 
         result.points.push_back({x, y, z});
         sumR += r;

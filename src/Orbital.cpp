@@ -6,7 +6,7 @@
 namespace qm {
 
 std::optional<std::pair<int,int>> parseOrbital(const std::string& s) {
-    if (s.size() < 2) return std::nullopt;
+    if (s.size() != 2) return std::nullopt;
 
     const int n = s[0] - '0';
     if (n < 1 || n > 7) return std::nullopt;

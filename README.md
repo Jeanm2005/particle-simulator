@@ -76,6 +76,12 @@ This project extends that direction with:
 
 - Energy: \(E_n = -13.6\,Z^2/n^2\) eV (exact for one-electron ions)
 
+Console input requires whole integers for atomic numbers and m, exact orbital
+labels (1s through 7f, with l < n), and explicit p/s and v/c choices. Invalid
+input exits with an error instead of silently substituting another orbital.
+Both exported clouds and the viewer use Y as the polar axis. Current animation
+rotates samples about Y, preserving their radius and height.
+
 ## Screening and validation
 
 Slater screening follows [the grouped shielding rules](https://lampz.tugraz.at/~hadley/ss1/molecules/atoms/slater.php)

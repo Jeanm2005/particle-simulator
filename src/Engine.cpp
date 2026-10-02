@@ -358,16 +358,13 @@ void Engine::updateParticles(float dt) {
 
     const float speed = flowSpeed_ * 0.4f;
     for (auto& p : particles_) {
+        double x = p.pos.x, z = p.pos.z;
+        advanceProbabilityCurrent(x, z, m_, static_cast<double>(speed) * dt);
+        p.pos.x = static_cast<float>(x);
+        p.pos.z = static_cast<float>(z);
         double vx, vy, vz;
         probabilityCurrentVelocity(p.pos.x, p.pos.y, p.pos.z, m_, vx, vy, vz);
         p.vel = glm::vec3(vx, vy, vz);
-        p.pos += p.vel * (speed * dt);
-
-        float r = glm::length(p.pos);
-        float rTarget = static_cast<float>(n_ * n_ / std::max(Zeff_, 0.5));
-        if (r > 1e-4f && r > rTarget * 3.0f) {
-            p.pos *= (rTarget * 2.5f) / r;
-        }
     }
     uploadParticles();
 }
