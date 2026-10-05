@@ -86,7 +86,11 @@ For a suspected stale binary, configure a fresh build directory and rebuild.
 - Complete, verify, and commit each agreed step; report the hash for the user to push.
 - Keep commits focused and avoid unrelated rewrites.
 - Keep README and these instructions synchronized when behavior changes.
-- Optional future CI: configure without CUDA and run console / CTest regressions.
+- GitHub Actions builds/tests console and OpenGL paths, requires offscreen shader
+  coverage, and compiles CUDA in a development container while testing CPU fallback.
+- Successful `v*` tag runs publish tested Linux packages and checksums to GitHub
+  Releases. GPU runtime parity and performance still require NVIDIA hardware.
+- Keep `.github/workflows/ci.yml` synchronized with build and test requirements.
 
 ## File ownership
 

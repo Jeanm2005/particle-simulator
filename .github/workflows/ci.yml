@@ -1,0 +1,133 @@
+name: CI and releases
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+jobs:
+  linux:
+    name: Linux (${{ matrix.mode }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [console, opengl]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Install build and graphics dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libglfw3-dev libglew-dev libglm-dev libgl1-mesa-dev libegl1-mesa-dev
+      - name: Configure
+        env:
+          MODE: ${{ matrix.mode }}
+        run: |
+          args=(-DQM_ENABLE_CUDA=OFF)
+          if [[ "$MODE" == console ]]; then
+            args+=(-DCMAKE_DISABLE_FIND_PACKAGE_OpenGL=ON)
+          fi
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release "${args[@]}"
+      - name: Build
+        run: cmake --build build --parallel 2
+      - name: Test
+        run: ctest --test-dir build --output-on-failure --no-tests=error
+      - name: Require offscreen shader coverage
+        if: matrix.mode == 'opengl'
+        run: |
+          test -x build/shader_tests
+          EGL_PLATFORM=surfaceless LIBGL_ALWAYS_SOFTWARE=1 ./build/shader_tests
+      - name: Package installed binary and data
+        env:
+          MODE: ${{ matrix.mode }}
+        run: |
+          cmake --install build --prefix "$PWD/package"
+          cp README.md package/
+          tar -czf "particle-simulator-linux-x86_64-${MODE}.tar.gz" -C package .
+          sha256sum "particle-simulator-linux-x86_64-${MODE}.tar.gz" > "particle-simulator-linux-x86_64-${MODE}.tar.gz.sha256"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: package-${{ matrix.mode }}
+          path: particle-simulator-linux-x86_64-*
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: test-logs-${{ matrix.mode }}
+          path: build/Testing/Temporary/
+          retention-days: 14
+
+  cuda-compile:
+    name: CUDA compile and CPU runtime fallback
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    container: nvidia/cuda:12.6.3-devel-ubuntu22.04
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends git ca-certificates cmake ninja-build g++
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Configure CUDA
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DQM_ENABLE_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=75 \
+            -DCMAKE_DISABLE_FIND_PACKAGE_OpenGL=ON
+      - name: Build CUDA kernels
+        run: cmake --build build --parallel 2
+      - name: Require compiled CUDA backend
+        run: test -f build/CMakeFiles/qm_compute.dir/cuda/ComputeBackend.cu.o
+      - name: Test fallback without a GPU
+        run: ctest --test-dir build --output-on-failure --no-tests=error
+      - name: Upload test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: test-logs-cuda
+          path: build/Testing/Temporary/
+          retention-days: 14
+
+  release:
+    name: Publish tagged release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [linux, cuda-compile]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v6
+        with:
+          pattern: package-*
+          path: dist
+          merge-multiple: true
+      - name: Create release with tested packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" dist/* --clobber
+          else
+            gh release create "$RELEASE_TAG" dist/* --verify-tag --generate-notes
+          fi

@@ -207,8 +207,7 @@ A single local CPU baseline for hydrogen 1s measured sampling/flow respectively:
 50k: 18.6/1.0 ms; 500k: 184.8/8.1 ms; 1M: 382.1/15.8 ms.
 These are indicative wall-clock measurements, not GPU speedup claims.
 
-Later work includes multi-orbital display, scientific data provenance, automated
-CI, and native Windows build instructions.
+Later work includes multi-orbital display, scientific data provenance and native Windows build instructions.
 
 ## Accuracy
 
@@ -240,3 +239,28 @@ and disclose approximations. Elementary particles are not assigned invented shap
 Sonification maps simulation data to audible signals; its audio is not literal
 sound emitted by an isolated orbital. Phonons require interacting lattice atoms,
 which the existing model does not simulate.
+
+## CI and release delivery
+
+[GitHub Actions](.github/workflows/ci.yml) runs on pull requests, pushes to `main`,
+`v*` tags, and manual dispatch. It builds and tests Linux console and OpenGL modes
+with CUDA disabled, requires software-EGL shader coverage, and separately compiles
+the CUDA backend in a CUDA 12.6 development container. That container has no GPU:
+it tests runtime CPU fallback; GPU parity/performance validation remains pending.
+The CUDA compile target uses architecture 75 and is not shipped as a release binary.
+
+Each successful Linux job uploads an installed package containing `bin/atom_sim`,
+element data, README, and a SHA-256 checksum. Test logs are retained for 14 days.
+Pushing a version tag (for example `v1.2.0`) publishes both tested packages to
+GitHub Releases only after all build/test jobs pass. Re-running the tag workflow
+updates assets on its existing release. No custom credentials are required;
+only the release job receives repository write permission.
+
+Packages target Ubuntu 24.04 x86_64. The OpenGL package requires GLFW, GLEW, GLM,
+and Mesa/OpenGL runtime libraries; install the viewer dependencies listed above.
+Extract a package, then run `./bin/atom_sim --console` or `--visual`.
+The TypeScript UI has not been implemented, so frontend deployment is a future step.
+
+After pushing the pipeline commit, inspect its first run in the repository's
+Actions tab. Branch protection can then require `Linux (console)`, `Linux (opengl)`,
+and `CUDA compile and CPU runtime fallback` before merging.
