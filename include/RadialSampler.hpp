@@ -13,6 +13,8 @@ public:
     void rebuild(int n, int l, double Z, int nBins = 4096);
     double sample(std::mt19937& gen) const;
     double rMax() const { return rMax_; }
+    const std::vector<double>& grid() const { return rGrid_; }
+    const std::vector<double>& cdf() const { return cdf_; }
     bool ready() const { return !cdf_.empty(); }
 
 private:
@@ -30,6 +32,8 @@ public:
 
     void rebuild(int l, int m, int nBins = 2048);
     double sample(std::mt19937& gen) const;
+    const std::vector<double>& grid() const { return thetaGrid_; }
+    const std::vector<double>& cdf() const { return cdf_; }
     bool ready() const { return !cdf_.empty(); }
 
 private:

@@ -1,4 +1,5 @@
 #include "Engine.hpp"
+#include "ComputeBackend.hpp"
 #include "Orbital.hpp"
 #include "Constants.hpp"
 #include "ShaderProgram.hpp"
@@ -293,10 +294,12 @@ void Engine::generateParticles() {
     std::vector<float> intensities;
     intensities.reserve(particleCount_);
 
+    Cloud gpuPoints;
+    const bool gpuSampled = cudaAvailable() && cudaSample(radial_, angular_, particleCount_, gen_(), gpuPoints);
     for (int i = 0; i < particleCount_; ++i) {
-        double r     = radial_.sample(gen_);
-        double theta = angular_.sample(gen_);
-        double phi   = phiDist(gen_);
+        double r     = gpuSampled ? 0.0 : radial_.sample(gen_);
+        double theta = gpuSampled ? 0.0 : angular_.sample(gen_);
+        double phi   = gpuSampled ? 0.0 : phiDist(gen_);
 
         glm::vec3 pos{
             static_cast<float>(r * std::sin(theta) * std::cos(phi)),
@@ -304,6 +307,7 @@ void Engine::generateParticles() {
             static_cast<float>(r * std::sin(theta) * std::sin(phi))
         };
 
+        if (gpuSampled) pos = glm::vec3(gpuPoints[i][0], gpuPoints[i][1], gpuPoints[i][2]);
         double vx, vy, vz;
         probabilityCurrentVelocity(pos.x, pos.y, pos.z, m_, vx, vy, vz);
 
@@ -342,9 +346,19 @@ void Engine::updateParticles(float dt) {
     if (!flowEnabled_ || m_ == 0) return;
 
     const float speed = flowSpeed_ * 0.4f;
+    Cloud updated;
+    const bool gpuAvailable = cudaAvailable();
+    if (gpuAvailable) {
+        updated.reserve(particles_.size());
+        for (const auto& p : particles_) updated.push_back({p.pos.x, p.pos.y, p.pos.z});
+    }
+    const bool gpuUpdated = gpuAvailable && cudaAdvance(updated, m_, static_cast<double>(speed) * dt);
+    std::size_t index = 0;
     for (auto& p : particles_) {
         double x = p.pos.x, z = p.pos.z;
-        advanceProbabilityCurrent(x, z, m_, static_cast<double>(speed) * dt);
+        if (gpuUpdated) { x = updated[index][0]; z = updated[index][2]; }
+        else advanceProbabilityCurrent(x, z, m_, static_cast<double>(speed) * dt);
+        ++index;
         p.pos.x = static_cast<float>(x);
         p.pos.z = static_cast<float>(z);
         double vx, vy, vz;

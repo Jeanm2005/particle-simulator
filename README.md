@@ -30,7 +30,7 @@ This project extends that direction with:
 - Modular CMake layout and clean separation of physics vs rendering
 - Dual CDF sampling (radial + angular)
 - Probability-current flow integrated into the live viewer
-- Planned **CUDA** acceleration (required next milestone, not optional)
+- Optional-at-build-time **CUDA** acceleration with runtime CPU fallback
 
 ## Features
 
@@ -43,7 +43,7 @@ This project extends that direction with:
 | Dual CDF sampling | Done |
 | Probability-current flow (key **P**) | Done |
 | GPU volumetric raytracer (key **T**) | Done |
-| **CUDA** parallel sampling & updates | **Planned (required)** |
+| **CUDA** parallel sampling & updates | Implemented; GPU validation pending |
 | Agentic AI workflow helpers | Optional |
 
 ## Controls (visual mode)
@@ -187,13 +187,25 @@ element records still need a provenance review.
 - [x] Fix screening, validate finite distributions, and cover the crash with tests.
 - [x] Fix C++17 portability, input parsing, coordinates, and probability flow.
 - [x] Repair documentation, installed data discovery, and export/shader errors.
-- [ ] Implement CUDA sampling and flow kernels with CPU fallback and parity tests.
+- [x] Implement CUDA sampling and flow kernels with CPU fallback and parity/benchmark runner.
+- [ ] Validate CUDA compilation, numerical parity, and performance on NVIDIA hardware.
 - [ ] Improve ray-march bounds, stepping, opacity, and camera consistency; benchmark.
 
-CUDA is the required next milestone. It has not been implemented: there is no
-`cuda/` directory or `QM_ENABLE_CUDA` option yet. The milestone will add parallel
-sampling and particle updates while preserving the CPU OpenGL path. Optional
-GPU volume evaluation can follow.
+CUDA implementation lives in `cuda/`. `QM_ENABLE_CUDA` defaults to ON and detects
+an available CUDA compiler; use `-DQM_ENABLE_CUDA=OFF` for an explicit CPU build.
+Missing compilers, unavailable devices, and CUDA runtime errors retain CPU sampling
+and flow. Sampling uses the same validated CPU-built CDF tables; GPU random streams
+are reproducible but differ from the CPU generator. GPU flow uses the same exact
+rotation about Y. The initial implementation copies results back to host memory;
+it does not yet use CUDA/OpenGL interop or persistent device buffers.
+
+Run `./build/compute_tests --cuda` for numerical checks and end-to-end CPU/GPU
+timings at 50k, 500k, and 1M particles. CTest marks CUDA parity skipped without a
+usable device. CUDA compilation and GPU measurements remain unverified in the
+current development environment (no nvcc and blocked NVIDIA device access).
+A single local CPU baseline for hydrogen 1s measured sampling/flow respectively:
+50k: 18.6/1.0 ms; 500k: 184.8/8.1 ms; 1M: 382.1/15.8 ms.
+These are indicative wall-clock measurements, not GPU speedup claims.
 
 Later work includes multi-orbital display, scientific data provenance, automated
 CI, and native Windows build instructions.
@@ -204,3 +216,27 @@ Hydrogenic wavefunctions are exact for the nonrelativistic one-electron model.
 Multi-electron screening is approximate. Ray-march rendering is currently a
 visual approximation with fixed stepping and normalization limitations. For
 quantitative chemistry, use a suitable Hartree–Fock or DFT package.
+
+## Product scope and future milestones
+
+The intended product is an interactive quantum and particle physics simulator:
+users choose a supported particle or enter its defining state/parameters, then
+explore its modeled behavior and visual representation. A TypeScript UI is the
+proposed interface; the current implementation is a C++ atomic-orbital prototype.
+
+Coverage must grow through explicit, validated physics models. Arbitrary particle
+input alone cannot determine dynamics: the model also needs interactions, initial
+state, boundary conditions, and a regime of validity. Visuals must identify whether
+they show probability density, a field, detector observables, or another quantity,
+and disclose approximations. Elementary particles are not assigned invented shapes.
+
+- [ ] Define supported particle categories, inputs, observables, and model validity.
+- [ ] Design a model/backend interface and connect a TypeScript interactive UI.
+- [ ] Add validated models beyond hydrogenic atomic orbitals incrementally.
+- [ ] Add optional orbital sonification: density scan, explicit audio mapping, WAV export.
+- [ ] Add time-dependent state superpositions and interference visualization/sonification.
+- [ ] Explore lattice dynamics and phonons as a separate model extension.
+
+Sonification maps simulation data to audible signals; its audio is not literal
+sound emitted by an isolated orbital. Phonons require interacting lattice atoms,
+which the existing model does not simulate.

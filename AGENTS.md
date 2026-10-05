@@ -25,7 +25,7 @@ Element records live in `data/elements.json`. Reference inspiration:
 | OpenGL point cloud, camera, live n/l/m | Required; implemented |
 | Probability-current animation | Required; implemented; preserve radius and Y |
 | GPU ray-march path | Required; implemented; accuracy improvements remain |
-| CUDA acceleration | Required next milestone; not implemented |
+| CUDA acceleration | Implemented; NVIDIA compilation/parity/performance validation pending |
 | Agentic workflow helpers | Optional |
 | 2D Bohr model | Out of scope |
 
@@ -39,7 +39,11 @@ Implement under `cuda/`:
 4. CPU fallback when CUDA is unavailable; retain the CPU OpenGL path.
 5. Numerical parity checks and performance measurements.
 
-There is no CUDA directory or build option yet. Keep README status accurate.
+CUDA kernels and `QM_ENABLE_CUDA` now exist. CPU fallback is required both at
+build time and runtime. `compute_tests --cuda` runs parity checks and end-to-end
+performance measurements; it skips without a usable device. NVIDIA validation is
+still pending: the current environment lacks nvcc and device access.
+Keep README status accurate; do not claim measured acceleration before benchmarking.
 
 ## Architecture and physics
 
@@ -93,7 +97,7 @@ For a suspected stale binary, configure a fresh build directory and rebuild.
 | Console / XYZ | Simulation.*, main.cpp |
 | Rendering / camera | Engine.*, Camera.hpp, ShaderProgram.* |
 | Elements / discovery | Element.*, data/elements.json, cmake/DataPaths.hpp.in |
-| CUDA (planned) | cuda/*, CMakeLists.txt |
+| CUDA | cuda/*, CMakeLists.txt |
 | Regressions | tests/* |
 
 ## Reference mapping
@@ -105,3 +109,17 @@ For a suspected stale binary, configure a fresh build directory and rebuild.
 | Raytracer | Engine::createRaytraceShaders / drawRaytrace |
 | Probability flow | probabilityCurrentVelocity, advanceProbabilityCurrent |
 | Hydrogen-only model | Extended through element JSON and Slater screening |
+
+## Product direction
+
+The intended scope is an interactive quantum/particle physics simulator with a
+proposed TypeScript UI for particle selection and state/parameter input. Atomic
+orbitals are the first implemented model, not the full product scope. Expand via
+validated models with explicit observables, interactions, and validity limits;
+do not present arbitrary particle shapes as physical predictions.
+
+After the CUDA and rendering milestones, track model/backend interfaces, the
+TypeScript UI, broader particle models, orbital density sonification and WAV
+export, time-dependent superpositions, and a possible lattice/phonon extension.
+Audio mappings must be labeled as sonification; isolated orbitals do not emit
+literal audible sound in the current model.

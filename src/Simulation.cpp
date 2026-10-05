@@ -1,4 +1,5 @@
 #include "Simulation.hpp"
+#include "ComputeBackend.hpp"
 #include "QuantumMath.hpp"
 #include "Constants.hpp"
 
@@ -44,7 +45,8 @@ SimulationResult Simulation::run() {
     result.points.reserve(nSamples_);
     double sumR = 0.0;
 
-    for (int i = 0; i < nSamples_; ++i) {
+    const bool gpuSampled = cudaAvailable() && cudaSample(radial, angular, nSamples_, gen_(), result.points);
+    for (int i = 0; !gpuSampled && i < nSamples_; ++i) {
         const double r     = radial.sample(gen_);
         const double theta = angular.sample(gen_);
         const double phi   = phiDist(gen_);
@@ -57,6 +59,9 @@ SimulationResult Simulation::run() {
         sumR += r;
     }
 
+    if (gpuSampled) {
+        for (const auto& p : result.points) sumR += std::hypot(std::hypot(p[0], p[1]), p[2]);
+    }
     result.meanRadius_a0 = sumR / nSamples_;
     if (!std::isfinite(result.meanRadius_a0))
         throw std::domain_error("Nonfinite sampled radius");
