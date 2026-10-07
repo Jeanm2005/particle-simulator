@@ -69,6 +69,10 @@ private:
     GLint  rtCamPos_ = -1, rtCamFwd_ = -1, rtCamRight_ = -1, rtCamUp_ = -1;
     GLint  rtN_ = -1, rtL_ = -1, rtM_ = -1, rtZ_ = -1, rtAspect_ = -1;
 
+    GLint rtTanHalfFov_ = -1, rtRadius_ = -1, rtDensityScale_ = -1;
+    GLint rtLengthScale_ = -1, rtSteps_ = -1;
+    float rtDensityScaleValue_ = 1.0f;
+
     Camera camera_;
     std::vector<Particle> particles_;
     int particleCount_ = 80000;

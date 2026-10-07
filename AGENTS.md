@@ -24,8 +24,8 @@ Element records live in `data/elements.json`. Reference inspiration:
 | Correct Schrödinger sampling and multi-element Z | Required; implemented |
 | OpenGL point cloud, camera, live n/l/m | Required; implemented |
 | Probability-current animation | Required; implemented; preserve radius and Y |
-| GPU ray-march path | Required; implemented; accuracy improvements remain |
-| CUDA acceleration | Implemented; NVIDIA compilation/parity/performance validation pending |
+| GPU ray-march path | Implemented; bounded rays, shared density scale, length-aware opacity, matched FOV; higher-orbital convergence/performance pending |
+| CUDA acceleration | Implemented; CUDA compilation verified in CI; NVIDIA parity/performance pending |
 | Agentic workflow helpers | Optional |
 | 2D Bohr model | Out of scope |
 
@@ -41,8 +41,10 @@ Implement under `cuda/`:
 
 CUDA kernels and `QM_ENABLE_CUDA` now exist. CPU fallback is required both at
 build time and runtime. `compute_tests --cuda` runs parity checks and end-to-end
-performance measurements; it skips without a usable device. NVIDIA validation is
-still pending: the current environment lacks nvcc and device access.
+performance measurements; it skips without a usable device.
+CUDA compilation and CPU fallback passed GitHub Actions in its CUDA container.
+NVIDIA runtime validation is still pending: the current environment lacks nvcc
+and device access.
 Keep README status accurate; do not claim measured acceleration before benchmarking.
 
 ## Architecture and physics

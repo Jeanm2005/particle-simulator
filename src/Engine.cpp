@@ -3,6 +3,7 @@
 #include "Orbital.hpp"
 #include "Constants.hpp"
 #include "ShaderProgram.hpp"
+#include "RaytraceShaders.hpp"
 
 #include <iostream>
 #include <sstream>
@@ -146,128 +147,7 @@ void main() {
 }
 
 void Engine::createRaytraceShaders() {
-    const char* vs = R"(#version 330 core
-layout(location=0) in vec2 aPos;
-out vec2 vUV;
-void main() {
-    vUV = aPos * 0.5 + 0.5;
-    gl_Position = vec4(aPos, 0.0, 1.0);
-})";
-
-    const char* fs = R"(#version 330 core
-in vec2 vUV;
-out vec4 FragColor;
-
-uniform vec3 uCamPos;
-uniform vec3 uCamFwd;
-uniform vec3 uCamRight;
-uniform vec3 uCamUp;
-uniform int  uN;
-uniform int  uL;
-uniform int  uM;
-uniform float uZ;
-uniform float uAspect;
-
-float laguerre(int k, int alpha, float x) {
-    if (k <= 0) return 1.0;
-    float Lm2 = 1.0;
-    float Lm1 = 1.0 + float(alpha) - x;
-    if (k == 1) return Lm1;
-    float L = 0.0;
-    for (int j = 2; j <= k; ++j) {
-        L = ((2.0*float(j) - 1.0 + float(alpha) - x) * Lm1
-            - (float(j) - 1.0 + float(alpha)) * Lm2) / float(j);
-        Lm2 = Lm1;
-        Lm1 = L;
-    }
-    return L;
-}
-
-float associatedLegendre(int l, int m, float x) {
-    m = abs(m);
-    if (m > l) return 0.0;
-    float pmm = 1.0;
-    if (m > 0) {
-        float somx2 = sqrt(max(0.0, (1.0 - x)*(1.0 + x)));
-        float fact = 1.0;
-        for (int i = 1; i <= m; ++i) {
-            pmm *= -fact * somx2;
-            fact += 2.0;
-        }
-    }
-    if (l == m) return pmm;
-    float pmmp1 = x * float(2*m + 1) * pmm;
-    if (l == m + 1) return pmmp1;
-    float pll = 0.0;
-    for (int ll = m + 2; ll <= l; ++ll) {
-        pll = (float(2*ll - 1)*x*pmmp1 - float(ll + m - 1)*pmm) / float(ll - m);
-        pmm = pmmp1;
-        pmmp1 = pll;
-    }
-    return pll;
-}
-
-float density(vec3 p) {
-    float r = length(p);
-    if (r < 1e-4) return 0.0;
-    float rho = 2.0 * uZ * r / float(uN);
-    int k = uN - uL - 1;
-    int alpha = 2 * uL + 1;
-    float L = laguerre(k, alpha, rho);
-    float R = exp(-rho * 0.5) * pow(rho, float(uL)) * L;
-    float radial = R * R;
-
-    float ct = clamp(p.y / r, -1.0, 1.0);
-    float Plm = associatedLegendre(uL, uM, ct);
-    float angular = Plm * Plm;
-
-    return radial * angular;
-}
-
-void main() {
-    vec2 ndc = vUV * 2.0 - 1.0;
-    ndc.x *= uAspect;
-    vec3 rayDir = normalize(uCamFwd + ndc.x * uCamRight + ndc.y * uCamUp);
-
-    float tMin = 0.0;
-    float tMax = length(uCamPos) + 40.0;
-    const int STEPS = 96;
-    float dt = (tMax - tMin) / float(STEPS);
-
-    vec3 col = vec3(0.02, 0.02, 0.05);
-    float transmittance = 1.0;
-    float maxD = 0.0;
-
-    for (int i = 0; i < STEPS; ++i) {
-        float t = tMin + (float(i) + 0.5) * dt;
-        vec3 p = uCamPos + rayDir * t;
-        maxD = max(maxD, density(p));
-    }
-    float invMax = (maxD > 1e-8) ? (1.0 / maxD) : 1.0;
-
-    for (int i = 0; i < STEPS; ++i) {
-        float t = tMin + (float(i) + 0.5) * dt;
-        vec3 p = uCamPos + rayDir * t;
-        float d = density(p) * invMax;
-        if (d < 0.01) continue;
-
-        float v = clamp(d * 1.5, 0.0, 1.0);
-        vec3 c;
-        if (v < 0.25)      c = mix(vec3(0.0), vec3(0.4,0.0,0.7), v/0.25);
-        else if (v < 0.5)  c = mix(vec3(0.4,0.0,0.7), vec3(0.9,0.05,0.05), (v-0.25)/0.25);
-        else if (v < 0.75) c = mix(vec3(0.9,0.05,0.05), vec3(1.0,0.45,0.0), (v-0.5)/0.25);
-        else               c = mix(vec3(1.0,0.45,0.0), vec3(1.0,1.0,0.9), (v-0.75)/0.25);
-
-        float alpha = d * 0.15;
-        col += transmittance * alpha * c;
-        transmittance *= (1.0 - alpha);
-        if (transmittance < 0.02) break;
-    }
-
-    FragColor = vec4(col, 1.0);
-})";
-
-    rtShader_ = createShaderProgram(vs, fs);
+    rtShader_ = createShaderProgram(raytraceVertex, raytraceFragment);
     rtCamPos_   = glGetUniformLocation(rtShader_, "uCamPos");
     rtCamFwd_   = glGetUniformLocation(rtShader_, "uCamFwd");
     rtCamRight_ = glGetUniformLocation(rtShader_, "uCamRight");
@@ -277,6 +157,11 @@ void main() {
     rtM_        = glGetUniformLocation(rtShader_, "uM");
     rtZ_        = glGetUniformLocation(rtShader_, "uZ");
     rtAspect_   = glGetUniformLocation(rtShader_, "uAspect");
+    rtTanHalfFov_ = glGetUniformLocation(rtShader_, "uTanHalfFov");
+    rtRadius_ = glGetUniformLocation(rtShader_, "uRadius");
+    rtDensityScale_ = glGetUniformLocation(rtShader_, "uDensityScale");
+    rtLengthScale_ = glGetUniformLocation(rtShader_, "uLengthScale");
+    rtSteps_ = glGetUniformLocation(rtShader_, "uSteps");
 }
 
 void Engine::generateParticles() {
@@ -285,6 +170,20 @@ void Engine::generateParticles() {
 
     radial_.rebuild(n_, l_, Zeff_);
     angular_.rebuild(l_, m_);
+
+    // A single orbital-wide density scale preserves brightness across rays.
+    double radialPeak = 0.0, angularPeak = 0.0;
+    for (double r : radial_.grid()) {
+        const double rho = 2.0 * Zeff_ * r / n_;
+        const double amplitude = std::exp(-rho * 0.5) * std::pow(rho, l_) *
+            associatedLaguerre(n_ - l_ - 1, 2 * l_ + 1, rho);
+        radialPeak = std::max(radialPeak, amplitude * amplitude);
+    }
+    for (double theta : angular_.grid()) {
+        const double amplitude = associatedLegendre(l_, std::abs(m_), std::cos(theta));
+        angularPeak = std::max(angularPeak, amplitude * amplitude);
+    }
+    rtDensityScaleValue_ = static_cast<float>(1.0 / (radialPeak * angularPeak));
 
     particles_.clear();
     particles_.reserve(particleCount_);
@@ -400,6 +299,11 @@ void Engine::drawRaytrace() {
     glUniform1i(rtM_, m_);
     glUniform1f(rtZ_, static_cast<float>(Zeff_));
     glUniform1f(rtAspect_, aspect);
+    glUniform1f(rtTanHalfFov_, std::tan(glm::radians(45.0f) * 0.5f));
+    glUniform1f(rtRadius_, static_cast<float>(radial_.rMax()));
+    glUniform1f(rtDensityScale_, rtDensityScaleValue_);
+    glUniform1f(rtLengthScale_, static_cast<float>(n_ * n_ / Zeff_));
+    glUniform1i(rtSteps_, 512);
 
     glBindVertexArray(rtVao_);
     glDrawArrays(GL_TRIANGLES, 0, 6);

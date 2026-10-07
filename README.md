@@ -188,8 +188,10 @@ element records still need a provenance review.
 - [x] Fix C++17 portability, input parsing, coordinates, and probability flow.
 - [x] Repair documentation, installed data discovery, and export/shader errors.
 - [x] Implement CUDA sampling and flow kernels with CPU fallback and parity/benchmark runner.
-- [ ] Validate CUDA compilation, numerical parity, and performance on NVIDIA hardware.
-- [ ] Improve ray-march bounds, stepping, opacity, and camera consistency; benchmark.
+- [x] Validate CUDA compilation and CPU runtime fallback in CI.
+- [ ] Validate numerical parity and performance on NVIDIA hardware.
+- [x] Match ray-march camera projection, bound rays to orbital size, and use consistent density/opacity.
+- [ ] Measure renderer performance and convergence across higher orbitals; tune stepping.
 
 CUDA implementation lives in `cuda/`. `QM_ENABLE_CUDA` defaults to ON and detects
 an available CUDA compiler; use `-DQM_ENABLE_CUDA=OFF` for an explicit CPU build.
@@ -201,7 +203,8 @@ it does not yet use CUDA/OpenGL interop or persistent device buffers.
 
 Run `./build/compute_tests --cuda` for numerical checks and end-to-end CPU/GPU
 timings at 50k, 500k, and 1M particles. CTest marks CUDA parity skipped without a
-usable device. CUDA compilation and GPU measurements remain unverified in the
+usable device. CUDA compilation and CPU runtime fallback passed the first GitHub Actions run
+in the CUDA development container. GPU measurements remain unverified in the
 current development environment (no nvcc and blocked NVIDIA device access).
 A single local CPU baseline for hydrogen 1s measured sampling/flow respectively:
 50k: 18.6/1.0 ms; 500k: 184.8/8.1 ms; 1M: 382.1/15.8 ms.
@@ -212,8 +215,13 @@ Later work includes multi-orbital display, scientific data provenance and native
 ## Accuracy
 
 Hydrogenic wavefunctions are exact for the nonrelativistic one-electron model.
-Multi-electron screening is approximate. Ray-march rendering is currently a
-visual approximation with fixed stepping and normalization limitations. For
+Multi-electron screening is approximate. Ray-march rendering remains a visual approximation: rays intersect the sampling
+sphere, use 512 midpoint steps, and share an orbital-wide density scale estimated
+from radial/angular grids. Exponential opacity includes step length and uses an
+orbital-size scale for visualization; displayed opacity is not a measured observable.
+Both rendering paths use a 45-degree vertical field of view. Offscreen tests cover
+ray misses, cameras inside the volume, charge scaling, camera distance, and step
+convergence for hydrogen 1s; higher-orbital convergence and performance remain pending. For
 quantitative chemistry, use a suitable Hartree–Fock or DFT package.
 
 ## Product scope and future milestones
@@ -261,6 +269,8 @@ and Mesa/OpenGL runtime libraries; install the viewer dependencies listed above.
 Extract a package, then run `./bin/atom_sim --console` or `--visual`.
 The TypeScript UI has not been implemented, so frontend deployment is a future step.
 
-After pushing the pipeline commit, inspect its first run in the repository's
-Actions tab. Branch protection can then require `Linux (console)`, `Linux (opengl)`,
+The first CI run passed console tests and CUDA compilation/runtime fallback.
+The OpenGL job could not acquire a GitHub-hosted runner; local software-EGL checks
+provide rendering coverage, but a successful remote OpenGL run remains pending.
+Branch protection can then require `Linux (console)`, `Linux (opengl)`,
 and `CUDA compile and CPU runtime fallback` before merging.
