@@ -303,7 +303,7 @@ void Engine::drawRaytrace() {
     glUniform1f(rtRadius_, static_cast<float>(radial_.rMax()));
     glUniform1f(rtDensityScale_, rtDensityScaleValue_);
     glUniform1f(rtLengthScale_, static_cast<float>(n_ * n_ / Zeff_));
-    glUniform1i(rtSteps_, 512);
+    glUniform1i(rtSteps_, raytraceSteps);
 
     glBindVertexArray(rtVao_);
     glDrawArrays(GL_TRIANGLES, 0, 6);

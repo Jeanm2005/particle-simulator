@@ -191,7 +191,8 @@ element records still need a provenance review.
 - [x] Validate CUDA compilation and CPU runtime fallback in CI.
 - [ ] Validate numerical parity and performance on NVIDIA hardware.
 - [x] Match ray-march camera projection, bound rays to orbital size, and use consistent density/opacity.
-- [ ] Measure renderer performance and convergence across higher orbitals; tune stepping.
+- [x] Measure representative higher-orbital convergence and software-renderer performance; tune stepping.
+- [ ] Validate full-window renderer performance on hardware GPUs.
 
 CUDA implementation lives in `cuda/`. `QM_ENABLE_CUDA` defaults to ON and detects
 an available CUDA compiler; use `-DQM_ENABLE_CUDA=OFF` for an explicit CPU build.
@@ -216,13 +217,21 @@ Later work includes multi-orbital display, scientific data provenance and native
 
 Hydrogenic wavefunctions are exact for the nonrelativistic one-electron model.
 Multi-electron screening is approximate. Ray-march rendering remains a visual approximation: rays intersect the sampling
-sphere, use 512 midpoint steps, and share an orbital-wide density scale estimated
+sphere, use 256 midpoint steps on a grid concentrated near the nucleus, and share
+an orbital-wide density scale estimated
 from radial/angular grids. Exponential opacity includes step length and uses an
 orbital-size scale for visualization; displayed opacity is not a measured observable.
 Both rendering paths use a 45-degree vertical field of view. Offscreen tests cover
 ray misses, cameras inside the volume, charge scaling, camera distance, and step
-convergence for hydrogen 1s; higher-orbital convergence and performance remain pending. For
-quantitative chemistry, use a suitable Hartree–Fock or DFT package.
+convergence for representative s/p/d/f states through n=7 from two viewing angles.
+These checks compare float images against a 4096-step numerical reference; they
+are not a proof of accuracy for every state, camera, or resolution. For quantitative
+chemistry, use a suitable Hartree–Fock or DFT package.
+
+Run `EGL_PLATFORM=surfaceless LIBGL_ALWAYS_SOFTWARE=1 ./build/shader_tests --benchmark`
+for optional synchronized frame timings and convergence errors. CTest runs the
+image regressions without timing assertions. See [renderer measurements](docs/renderer-measurements.md)
+for the sampling method, local baseline, and remaining validation.
 
 ## Product scope and future milestones
 

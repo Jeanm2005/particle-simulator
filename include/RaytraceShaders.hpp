@@ -1,6 +1,8 @@
 #pragma once
 
 namespace qm {
+// Selected from representative s/p/d/f convergence checks through n=7.
+inline constexpr int raytraceSteps = 256;
 inline constexpr const char* raytraceVertex = R"(#version 330 core
 layout(location=0) in vec2 aPos;
 out vec2 vUV;
@@ -103,13 +105,22 @@ void main() {
         FragColor = vec4(background, 1.0);
         return;
     }
-    int steps = clamp(uSteps, 32, 1024);
-    float dt = (tMax - tMin) / float(steps);
+    int steps = clamp(uSteps, 32, 4096);
+    // Stretch the grid away from the nucleus; inner radial structure needs
+    // finer resolution than exponentially faint tails. uN/uZ is in a0.
+    float radialScale = float(uN) / uZ;
+    float lower = asinh((tMin + projection) / radialScale);
+    float upper = asinh((tMax + projection) / radialScale);
+    float increment = (upper - lower) / float(steps);
+    float previous = tMin;
     vec3 col = vec3(0.0);
     float transmittance = 1.0;
-    for (int i = 0; i < 1024; ++i) {
+    for (int i = 0; i < 4096; ++i) {
         if (i >= steps) break;
-        float t = tMin + (float(i) + 0.5) * dt;
+        float next = radialScale * sinh(lower + float(i + 1) * increment) - projection;
+        float dt = next - previous;
+        float t = 0.5 * (previous + next);
+        previous = next;
         vec3 p = uCamPos + rayDir * t;
         float d = clamp(density(p) * uDensityScale, 0.0, 1.0);
 

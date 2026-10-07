@@ -24,7 +24,7 @@ Element records live in `data/elements.json`. Reference inspiration:
 | Correct Schrödinger sampling and multi-element Z | Required; implemented |
 | OpenGL point cloud, camera, live n/l/m | Required; implemented |
 | Probability-current animation | Required; implemented; preserve radius and Y |
-| GPU ray-march path | Implemented; bounded rays, shared density scale, length-aware opacity, matched FOV; higher-orbital convergence/performance pending |
+| GPU ray-march path | Implemented; bounded rays, shared density scale, length-aware opacity, matched FOV; representative higher-orbital convergence/software timings verified; hardware performance pending |
 | CUDA acceleration | Implemented; CUDA compilation verified in CI; NVIDIA parity/performance pending |
 | Agentic workflow helpers | Optional |
 | 2D Bohr model | Out of scope |
@@ -77,7 +77,10 @@ Console smoke input: H, 1s, p. Expect finite mean radius near 1.5 a0 and
 Check the CPU fallback with `-DCMAKE_DISABLE_FIND_PACKAGE_OpenGL=ON` in a separate
 build directory. Regression suites cover screening, sampling, flow, coordinates,
 input parsing, relocated installations, and export failures. Offscreen shader
-checks run when EGL is available. Other graphics runtime checks require a working
+checks run when EGL is available. Renderer image checks cover representative states through n=7 from two angles
+against a 4096-step reference. `shader_tests --benchmark` additionally reports
+synchronized offscreen timings; keep software-GL and hardware measurements distinct.
+Other graphics runtime checks require a working
 context; report when they cannot be performed.
 
 For WSL graphics problems, try software GL with `LIBGL_ALWAYS_SOFTWARE=1`.

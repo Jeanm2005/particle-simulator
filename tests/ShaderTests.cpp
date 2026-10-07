@@ -1,5 +1,6 @@
 #include "ShaderProgram.hpp"
 #include "RaytraceShaders.hpp"
+#include "RaytraceChecks.hpp"
 #include <array>
 #include <cmath>
 #include <EGL/egl.h>
@@ -8,7 +9,12 @@
 #include <stdexcept>
 #include <string>
 
-int main() {
+int main(int argc, char** argv) {
+    const bool benchmark = argc == 2 && std::string(argv[1]) == "--benchmark";
+    if (argc > 1 && !benchmark) {
+        std::cerr << "Usage: shader_tests [--benchmark]\n";
+        return 1;
+    }
     EGLDisplay display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
     if (display == EGL_NO_DISPLAY || !eglInitialize(display, nullptr, nullptr)) {
         std::cout << "No offscreen EGL context available\n";
@@ -99,6 +105,7 @@ int main() {
             if (near[0] <= tail[0] + 20 || inside[0] <= miss[0] + 20 ||
                 std::abs(int(miss[0]) - 5) > 1 || std::abs(int(miss[2]) - 13) > 1)
                 throw std::runtime_error("Orbital render bounds/density/inside-camera failed");
+            checkOrbitalImages(orbital, benchmark);
             glDeleteBuffers(1, &buffer); glDeleteVertexArrays(1, &vao); glDeleteProgram(orbital);
             auto rejects = [](const char* vs, const char* fs, const char* expected) {
                 try {
