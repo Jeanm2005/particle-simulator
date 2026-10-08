@@ -15,12 +15,13 @@ namespace qm {
 Simulation::Simulation(const Element& element,
                        int n, int l, int m,
                        bool useSlater,
-                       int nSamples)
+                       int nSamples, std::uint32_t seed, BackendPreference backend)
     : element_(element)
     , n_(n), l_(l), m_(m)
     , useSlater_(useSlater)
     , nSamples_(nSamples)
-    , gen_(42)
+    , gen_(seed)
+    , backend_(backend)
 {}
 
 SimulationResult Simulation::run() {
@@ -40,28 +41,9 @@ SimulationResult Simulation::run() {
     RadialSampler  radial(n_, l_, result.Zeff);
     AngularSampler angular(l_, m_);
 
-    std::uniform_real_distribution<double> phiDist(0.0, 2.0 * PI);
-
-    result.points.reserve(nSamples_);
     double sumR = 0.0;
-
-    const bool gpuSampled = cudaAvailable() && cudaSample(radial, angular, nSamples_, gen_(), result.points);
-    for (int i = 0; !gpuSampled && i < nSamples_; ++i) {
-        const double r     = radial.sample(gen_);
-        const double theta = angular.sample(gen_);
-        const double phi   = phiDist(gen_);
-
-        const double x = r * std::sin(theta) * std::cos(phi);
-        const double y = r * std::cos(theta);
-        const double z = r * std::sin(theta) * std::sin(phi);
-
-        result.points.push_back({x, y, z});
-        sumR += r;
-    }
-
-    if (gpuSampled) {
-        for (const auto& p : result.points) sumR += std::hypot(std::hypot(p[0], p[1]), p[2]);
-    }
+    result.execution = sampleCloud(radial, angular, nSamples_, gen_, result.points, backend_);
+    for (const auto& p : result.points) sumR += std::hypot(std::hypot(p[0], p[1]), p[2]);
     result.meanRadius_a0 = sumR / nSamples_;
     if (!std::isfinite(result.meanRadius_a0))
         throw std::domain_error("Nonfinite sampled radius");

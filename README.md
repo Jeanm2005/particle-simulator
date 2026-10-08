@@ -247,7 +247,8 @@ they show probability density, a field, detector observables, or another quantit
 and disclose approximations. Elementary particles are not assigned invented shapes.
 
 - [x] Define supported particle categories, inputs, observables, and model validity.
-- [ ] Design a model/backend interface and connect a TypeScript interactive UI.
+- [x] Implement a graphics-independent orbital model/backend adapter with validated requests and execution metadata.
+- [ ] Choose frontend transport and connect a TypeScript interactive UI.
 - [ ] Add validated models beyond hydrogenic atomic orbitals incrementally.
 - [ ] Add optional orbital sonification: density scan, explicit audio mapping, WAV export.
 - [ ] Add time-dependent state superpositions and interference visualization/sonification.
@@ -255,8 +256,11 @@ and disclose approximations. Elementary particles are not assigned invented shap
 
 The [model scope and contract](docs/model-scope.md) defines the first supported
 model, validated inputs, units, output meanings, and required UI disclosures.
-Its request/result contract is a design for the next model-adapter stage; no JSON
-API or TypeScript UI exists yet. Future models remain unavailable until validated.
+Its typed C++ request/result contract is implemented by `OrbitalModel` in the
+`qm_model` CMake target, with a 1,000,000-sample limit, configurable seed, explicit
+CPU or automatic CUDA/CPU selection, stable errors, and atomic-unit current
+updates. Console and viewer execution share the same sampling/flow dispatch.
+No JSON API or TypeScript UI exists yet. Future models remain unavailable until validated.
 
 Sonification maps simulation data to audible signals; its audio is not literal
 sound emitted by an isolated orbital. Phonons require interacting lattice atoms,
