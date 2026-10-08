@@ -246,12 +246,17 @@ state, boundary conditions, and a regime of validity. Visuals must identify whet
 they show probability density, a field, detector observables, or another quantity,
 and disclose approximations. Elementary particles are not assigned invented shapes.
 
-- [ ] Define supported particle categories, inputs, observables, and model validity.
+- [x] Define supported particle categories, inputs, observables, and model validity.
 - [ ] Design a model/backend interface and connect a TypeScript interactive UI.
 - [ ] Add validated models beyond hydrogenic atomic orbitals incrementally.
 - [ ] Add optional orbital sonification: density scan, explicit audio mapping, WAV export.
 - [ ] Add time-dependent state superpositions and interference visualization/sonification.
 - [ ] Explore lattice dynamics and phonons as a separate model extension.
+
+The [model scope and contract](docs/model-scope.md) defines the first supported
+model, validated inputs, units, output meanings, and required UI disclosures.
+Its request/result contract is a design for the next model-adapter stage; no JSON
+API or TypeScript UI exists yet. Future models remain unavailable until validated.
 
 Sonification maps simulation data to audible signals; its audio is not literal
 sound emitted by an isolated orbital. Phonons require interacting lattice atoms,

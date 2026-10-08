@@ -130,5 +130,9 @@ do not present arbitrary particle shapes as physical predictions.
 After the CUDA and rendering milestones, track model/backend interfaces, the
 TypeScript UI, broader particle models, orbital density sonification and WAV
 export, time-dependent superpositions, and a possible lattice/phonon extension.
+The scope milestone is documented in `docs/model-scope.md`; use its supported
+model, input, observable, unit, and validity contract for the next adapter/UI stage.
+The contract is a design, not an implemented JSON API. Only the hydrogenic orbital
+model currently runs; future model entries must remain unavailable until validated.
 Audio mappings must be labeled as sonification; isolated orbitals do not emit
 literal audible sound in the current model.
