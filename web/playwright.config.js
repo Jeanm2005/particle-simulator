@@ -19,5 +19,5 @@ export default defineConfig({
     url: 'http://127.0.0.1:8765',
     reuseExistingServer: false,
     timeout: 15000,
-  }, ...(process.env.QM_TEST_WASM ? [{ command: 'python3 -m http.server 8766 --bind 127.0.0.1 --directory site-dist', url: 'http://127.0.0.1:8766', reuseExistingServer: false, timeout: 15000 }] : [])],
+  }, ...(process.env.QM_TEST_WASM ? [{ command: 'python3 -m http.server 8766 --bind 127.0.0.1 --directory ../dist', url: 'http://127.0.0.1:8766', reuseExistingServer: false, timeout: 15000 }] : [])],
 });

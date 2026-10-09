@@ -25,11 +25,11 @@ With em++ on PATH, from the repository root:
 ```bash
 npm --prefix web ci
 npm --prefix web run build:demo
-python3 -m http.server 8001 --bind 127.0.0.1 --directory web/site-dist
+python3 -m http.server 8001 --bind 127.0.0.1 --directory dist
 ```
 
 Alternatively set `EMXX` to the absolute em++ executable for the build command.
-Open `http://127.0.0.1:8001`. Generated assets in `web/site-dist` include compiled
+Open `http://127.0.0.1:8001`. Generated assets in `dist` include compiled
 TypeScript, the C++ Wasm module, and preloaded element data; all are required.
 The generated directory and compiler scratch files are ignored by Git.
 [Embind](https://emscripten.org/docs/porting/connecting_cpp_and_javascript/embind.html)

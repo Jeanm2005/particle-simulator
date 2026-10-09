@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const output = path.join(root, 'web/site-dist');
+const output = path.join(root, 'dist');
 const generated = path.join(root, 'web/.wasm-build');
 await mkdir(output, { recursive: true });
 await mkdir(generated, { recursive: true });

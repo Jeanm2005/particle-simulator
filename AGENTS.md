@@ -160,5 +160,5 @@ Browser demo checks: install Emscripten 4.0.15, run `npm --prefix web run build:
 from the repository root, then `QM_TEST_WASM=1 npm exec -- playwright test` from
 `web/`. CI runs both native and WebAssembly
 projects. `.openai/hosting.json` binds the provisional Sites deployment; build
-output in `web/site-dist` is generated and ignored. Keep its provisional status
+output in `dist` is generated and ignored. Keep its provisional status
 and remaining hardware/data/model milestones visible.

@@ -15,6 +15,7 @@ atom_sim
 *.xyz
 web/node_modules/
 web/dist/
+/dist/
 web/site-dist/
 web/.wasm-build/
 web/test-results/
