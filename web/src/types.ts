@@ -14,6 +14,7 @@ export interface Request {
   sampleCount: number;
   seed: number;
   backend: "cpu" | "auto";
+  superposition?: { state: { n: number; l: number; m: number }; weight: number; phase: number };
 }
 export interface Execution { backend: string; fallbackReason: string }
 export interface Result {
@@ -26,6 +27,7 @@ export interface Result {
   effectiveCharge: number;
   energyEV: number;
   meanRadiusA0: number;
+  meanYA0: number;
   timeAtomicUnits: number;
   samplingExecution: Execution;
   operationExecution: Execution;
@@ -38,5 +40,7 @@ export interface Catalog {
   maxL: number;
   maxSamples: number;
   maxPreviewPoints: number;
+  maxSuperpositionN: number;
+  maxSuperpositionSamples: number;
   elements: ElementInfo[];
 }

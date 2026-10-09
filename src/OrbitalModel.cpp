@@ -29,6 +29,7 @@ void validate(const OrbitalRequest& request) {
         throw ModelError("resource-limit", "sampleCount", "Sample count exceeds 1000000");
 }
 }
+void OrbitalModel::validateRequest(const OrbitalRequest& request) { validate(request); }
 OrbitalResult OrbitalModel::run(const OrbitalRequest& request) const {
     validate(request);
     const auto element = database_.findByZ(request.atomicNumber);

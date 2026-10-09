@@ -46,6 +46,7 @@ class OrbitalModel {
 public:
     explicit OrbitalModel(const ElementDatabase& database) : database_(database) {}
     static ModelCapabilities capabilities() { return {}; }
+    static void validateRequest(const OrbitalRequest&);
     OrbitalResult run(const OrbitalRequest&) const;
     // Time is in atomic units; the last operation's backend is returned separately.
     ComputeExecution advance(OrbitalResult&, double dt) const;

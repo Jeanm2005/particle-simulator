@@ -115,6 +115,30 @@ class TransportTests(unittest.TestCase):
             self.assertEqual(self.call("/api/advance", {"runId": sampled["runId"], "dt": dt})[0], 400)
         self.assertEqual(self.call("/api/advance", {"runId": sampled["runId"], "dt": 0})[0], 200)
 
+    def test_superposition(self):
+        combination = request(model="orbital-superposition", sampleCount=10000,
+                              superposition={"state": {"n": 2, "l": 1, "m": 0}, "weight": 0.5, "phase": 0})
+        status, first = self.call("/api/sample", combination)
+        self.assertEqual(status, 200)
+        self.assertGreater(first["meanYA0"], 0.6)
+        status, second = self.call("/api/advance", {"runId": first["runId"], "dt": math.pi/0.375})
+        self.assertEqual(status, 200)
+        self.assertLess(second["meanYA0"], -0.6)
+        self.assertEqual(first["energyEV"], second["energyEV"])
+        for field, value in (("weight", True), ("phase", "1"), ("weight", 1.2)):
+            invalid = json.loads(json.dumps(combination))
+            invalid["superposition"][field] = value
+            status, error = self.call("/api/sample", invalid)
+            self.assertGreaterEqual(status, 400)
+            self.assertEqual(error["error"]["field"], "superposition." + field)
+        invalid = json.loads(json.dumps(combination))
+        invalid["screening"] = "slater-neutral"
+        self.assertEqual(self.call("/api/sample", invalid)[0], 422)
+        invalid = json.loads(json.dumps(combination))
+        invalid["superposition"]["state"] = {"n": 1, "l": 0, "m": 0}
+        self.assertEqual(self.call("/api/sample", invalid)[1]["error"]["field"], "superposition.state")
+        self.assertEqual(self.call("/api/advance", {"runId": first["runId"], "dt": 0})[0], 200)
+
     def test_worker_failure_and_busy(self):
         self.worker.lock.acquire()
         try:

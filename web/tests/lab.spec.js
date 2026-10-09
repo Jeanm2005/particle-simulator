@@ -106,7 +106,7 @@ test('fractional inputs are blocked and unavailable models stay disabled', async
   await page.locator('#sample').click();
   expect(submissions).toBe(0);
   expect(await page.locator('#samples').evaluate(input => input.validity.stepMismatch)).toBe(true);
-  await expect(page.locator('#model option:disabled')).toHaveCount(2);
+  await expect(page.locator('#model option:disabled')).toHaveCount(1);
 });
 
 test('offline recovery works without fabricated results', async ({ page }) => {
@@ -129,4 +129,18 @@ test('another run invalidates the old browser handle', async ({ page, request })
   await page.locator('#step').click();
   await expect(page.locator('#error')).toContainText('no longer active');
   await expect(page.locator('#step')).toBeDisabled();
+});
+
+test('coherent density changes with time and pure-Z constraints are explicit', async ({ page }) => {
+  await ready(page);
+  await page.locator('#try-interference').click();
+  await expect(page.locator('#status')).toContainText('Coherent two-state density');
+  await expect(page.locator('#active-state')).toHaveText('H / 1s + 2p / interference');
+  await expect(page.locator('#screening')).toBeDisabled();
+  await expect(page.locator('#dynamics-title')).toHaveText('Time-dependent interference');
+  expect(Number(await page.locator('#centroid').textContent())).toBeGreaterThan(0.5);
+  await page.locator('#dt').fill(String(Math.PI / 0.375));
+  await page.locator('#step').click();
+  await expect.poll(async () => Number(await page.locator('#centroid').textContent())).toBeLessThan(-0.5);
+  await expect(page.locator('#interpretation')).toContainText('not tracked trajectories');
 });

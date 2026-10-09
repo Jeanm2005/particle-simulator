@@ -100,3 +100,10 @@ main{padding-top:27px}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}
 }
 
+.demo-context{display:flex;align-items:center;gap:20px;margin:-10px 0 26px;padding:16px 20px;border:1px solid var(--line);border-radius:8px;background:#101e27;font-size:14px;line-height:1.6}
+.demo-context p{margin:0;flex:1;color:var(--muted)}
+.demo-context a{color:var(--accent);white-space:nowrap}
+.demo-context button{font-size:14px}
+.metrics:has(#centroid-metric:not([hidden])){grid-template-columns:repeat(5,minmax(0,1fr))}
+@media(max-width:1000px){.demo-context{flex-wrap:wrap}.demo-context p{flex-basis:100%}.metrics:has(#centroid-metric:not([hidden])){grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:700px){.model-badge{display:block;font-size:12px}.intro{flex-wrap:wrap}.demo-context button{width:100%}}

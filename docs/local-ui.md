@@ -3,7 +3,9 @@
 The TypeScript UI uses a same-origin, loopback-only Python HTTP server and a
 persistent `atom_api` C++ worker. Sampling and current updates execute through
 `OrbitalModel`; no wavefunctions or current equations are implemented in browser
-code. This is a local Linux development/desktop interface, not a hosted service.
+code. This guide covers the local Linux development/desktop interface; the
+[provisional public demo](browser-demo.md) uses the same C++ session compiled
+to WebAssembly, with no Python server.
 
 ## Build and run
 
@@ -41,7 +43,8 @@ python3 share/atom_sim/tools/serve.py --binary bin/atom_api
 
 A plain `cmake --install` installs native binaries and data, but does not compile
 or install UI assets; the release workflow explicitly bundles the built UI.
-Native Windows server support and deployment beyond loopback are future work.
+Native Windows server support remains future work. Keep this server on loopback;
+the public demo has a separate static build.
 
 ## Using the interface
 
@@ -60,15 +63,21 @@ Step and Play send current updates to C++, using the entered delta time in atomi
 units. Playback schedules the next step after the previous backend response;
 it does not promise real-time simulation speed. Pause and page visibility changes
 stop further scheduled steps. One step already in flight can still complete.
-For m = 0, samples stay fixed while model time advances.
+For a stationary m = 0 orbital, samples stay fixed while model time advances.
+
+Choose Two-orbital superposition, or use the 1s + 2p quick start, to evolve
+interference. Both states share pure Z; screening is disabled. Enter second-state
+weight in [0,1] and relative phase in radians. Each step resamples the density at
+the new time; these points do not track trajectories. See
+[the superposition contract](superpositions.md) for limits and analytic checks.
 
 The full cloud stays in the worker. Responses contain at most 20,000 preview
 points, selected at fixed evenly spaced sample indices, plus statistics and
 counts for the full requested cloud (up to 1,000,000 samples). The preview shows
 its displayed/sample counts. Current updates preserve preview sample identity.
-Camera scale is fitted to the preview's maximum radius; point color uses scaled
+Camera scale is fitted when sampling a new run and retained across updates; point color uses scaled
 radius and brightness is a display mapping. Neither represents a measured
-observable. Mean radius is computed from every sampled point.
+observable. Mean radius and mean Y are computed from every sampled point.
 
 ## JSON HTTP contract
 
@@ -84,7 +93,7 @@ out-of-range integer conversions are rejected before invoking C++.
 - `POST /api/sample` accepts the version-1 orbital request from
   [the model contract](model-scope.md). All fields are required. It returns the
   validated request, model version, element identity and metadata availability,
-  effective charge, energy in eV, mean radius in a0, full/preview counts, preview
+  effective charge, energy in eV, mean radius and mean Y in a0, full/preview counts, preview
   points, sampling/operation backend metadata, units, and an opaque `runId`.
 - `POST /api/advance` accepts exactly `{"runId":"...","dt":0.1}`. Delta time
   must be finite and is in atomic units. It updates the worker's full cloud and

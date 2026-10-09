@@ -15,6 +15,8 @@ atom_sim
 *.xyz
 web/node_modules/
 web/dist/
+web/site-dist/
+web/.wasm-build/
 web/test-results/
 web/playwright-report/
 __pycache__/

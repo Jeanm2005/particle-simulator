@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="execution-mode" content="native">
   <title>Orbital lab · Quantum simulator</title>
   <link rel="stylesheet" href="/style.css">
   <script type="module" src="/assets/main.js"></script>
@@ -14,14 +15,15 @@
     <span id="connection" class="connection">Connecting to local backend…</span>
   </header>
   <main>
-    <div class="intro"><div><p class="eyebrow">01 / ATOMIC ORBITALS</p><h1>Explore a quantum state.</h1><p>Choose an element and orbital. See where an electron is likely to be found.</p></div><span class="model-badge">Hydrogenic model</span></div>
+    <div class="intro"><div><p class="eyebrow">01 / ATOMIC ORBITALS</p><h1>Explore a quantum state.</h1><p>Choose an orbital or combine two states to explore interference.</p></div><span class="model-badge">Provisional demo · in development</span></div>
+    <div class="demo-context"><p>This is an actively developed quantum/particle simulator. Try hydrogen 1s, a 2p orbital, or evolving 1s + 2p interference. GPU performance and broader particle models remain under development.</p><a href="https://github.com/Jeanm2005/particle-simulator" target="_blank" rel="noopener noreferrer">Source &amp; roadmap</a><button id="try-interference" type="button">Try 1s + 2p interference</button></div>
     <div class="workspace">
       <aside class="controls">
         <form id="state-form">
           <fieldset id="setup" disabled>
             <legend>Define the state</legend>
             <label for="model">Physics model</label>
-            <select id="model"><option value="hydrogenic-orbital">Hydrogenic orbital</option><option disabled>Orbital superposition · planned</option><option disabled>Lattice dynamics · exploratory</option></select>
+            <select id="model"><option value="hydrogenic-orbital">Hydrogenic orbital</option><option value="orbital-superposition">Two-orbital superposition</option><option disabled>Lattice dynamics · exploratory</option></select>
             <label for="element">Element</label>
             <select id="element"><option>Loading element database…</option></select>
             <label for="atomic-number">Atomic number Z</label>
@@ -31,6 +33,15 @@
               <div><label for="n">Principal n</label><input id="n" name="n" type="number" min="1" max="7" step="1" value="1" required></div>
               <div><label for="l">Angular l</label><input id="l" name="l" type="number" min="0" max="0" step="1" value="0" required></div>
               <div><label for="m">Magnetic m</label><input id="m" name="m" type="number" min="0" max="0" step="1" value="0" required></div>
+            </div>
+            <div id="superposition-controls" hidden>
+              <p class="hint">Second orbital · one shared pure-Z Hamiltonian</p>
+              <div class="quantum-grid">
+                <div><label for="second-n">Second n</label><input id="second-n" type="number" min="1" max="4" step="1" value="2" required disabled></div>
+                <div><label for="second-l">Second l</label><input id="second-l" type="number" min="0" max="1" step="1" value="1" required disabled></div>
+                <div><label for="second-m">Second m</label><input id="second-m" type="number" min="-1" max="1" step="1" value="0" required disabled></div>
+              </div>
+              <div class="pair"><div><label for="weight">Second-state weight</label><input id="weight" type="number" min="0" max="1" step="any" value="0.5" required disabled></div><div><label for="phase">Relative phase (rad)</label><input id="phase" type="number" min="-1000000" max="1000000" step="any" value="0" required disabled></div></div>
             </div>
             <label for="screening">Charge model</label>
             <select id="screening"><option value="pure-z">Pure nuclear Z</option><option value="slater-neutral">Slater screening · approximate</option></select>
@@ -43,7 +54,7 @@
         <p id="status" class="status" role="status" aria-live="polite">Loading model capabilities…</p>
         <p id="error" class="error" role="alert" hidden></p>
         <button id="reconnect" type="button" hidden>Reconnect</button>
-        <div class="model-note"><p class="eyebrow">MODEL LIMITS</p><p>A stationary, nonrelativistic electron orbital in a fixed central potential. Neutral atoms use an approximate orbital model.</p><p>No collisions, radiation, spin dynamics, or external fields.</p></div>
+        <div class="model-note"><p class="eyebrow">MODEL LIMITS</p><p>Nonrelativistic orbitals in a fixed central potential. Single states have stationary density; superpositions evolve through relative energy phases. Neutral atoms use an approximate orbital model.</p><p>No collisions, radiation, spin dynamics, or external fields. Browser demos use CPU physics; native CUDA and ray marching are separate implementations.</p></div>
       </aside>
       <section class="results" aria-label="Orbital results">
         <div class="viewer-header"><div><p class="eyebrow">ELECTRON PROBABILITY DENSITY</p><h2 id="active-state">Ready to explore</h2></div><button id="reset-camera" type="button">Reset view</button></div>
@@ -52,15 +63,16 @@
         <div class="metrics">
           <div><span>Energy <small>eV</small></span><strong id="energy">—</strong></div>
           <div><span>Mean radius <small>a₀</small></span><strong id="radius">—</strong></div>
+          <div id="centroid-metric" hidden><span>Mean Y <small>a₀</small></span><strong id="centroid">—</strong></div>
           <div><span>Effective charge</span><strong id="charge">—</strong></div>
           <div><span>Samples</span><strong id="count">—</strong></div>
         </div>
-        <div class="flow-panel"><div><h3>Probability current</h3><p id="flow-description">Rotation about Y preserves radius and height.</p></div><div class="flow-controls"><label for="dt">Step Δt <small>atomic units</small></label><input id="dt" type="number" value="0.1" min="-1000" max="1000" step="any" required><button id="step" type="button" disabled>Step</button><button id="play" type="button" disabled aria-pressed="false">Play</button></div><p class="flow-time">Model time: <span id="time">0</span> atomic units · Playback advances one Δt per backend response.</p></div>
+        <div class="flow-panel"><div><h3 id="dynamics-title">Probability current</h3><p id="flow-description">Rotation about Y preserves radius and height.</p></div><div class="flow-controls"><label for="dt">Step Δt <small>atomic units</small></label><input id="dt" type="number" value="0.1" min="-1000" max="1000" step="any" required><button id="step" type="button" disabled>Step</button><button id="play" type="button" disabled aria-pressed="false">Play</button></div><p class="flow-time">Model time: <span id="time">0</span> atomic units · Playback advances one Δt per computed snapshot.</p></div>
         <p id="execution" class="execution">Execution details will appear after sampling.</p>
         <p id="interpretation" class="interpretation">Points represent samples of |ψ|². Color and brightness are display mappings; the cloud does not show individual electron trajectories. Mean radius is a sampled estimate.</p>
       </section>
     </div>
-    <footer class="page-footer"><span>Validated models first. Broader particle models are coming incrementally.</span><span>LOCAL C++ BACKEND / TYPESCRIPT UI</span></footer>
+    <footer class="page-footer"><span>Provisional internship demo. Scope and measurements are documented in the repository.</span><span id="execution-label">C++ PHYSICS / TYPESCRIPT UI</span></footer>
   </main>
 </body>
 </html>

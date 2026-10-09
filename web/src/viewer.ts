@@ -96,7 +96,7 @@ export class CloudViewer {
     const flat = new Float32Array(points.length * 3);
     let maximum = 0;
     points.forEach((point, i) => { flat.set(point, i * 3); maximum = Math.max(maximum, Math.hypot(...point)); });
-    this.scale = maximum || 1;
+    if (reset || this.count === 0) this.scale = maximum || 1;
     this.count = points.length;
     this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.buffer);
     this.gl.bufferData(this.gl.ARRAY_BUFFER, flat, this.gl.DYNAMIC_DRAW);

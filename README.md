@@ -46,6 +46,8 @@ This project extends that direction with:
 | GPU volumetric raytracer (key **T**) | Done |
 | **CUDA** parallel sampling & updates | Implemented; GPU validation pending |
 | TypeScript orbital UI and local JSON transport | Implemented; C++ sampling/current, WebGL point preview |
+| Two-orbital time-dependent interference | Implemented; pure-Z, n ≤ 4, density snapshots |
+| Provisional browser demo | C++ compiled to WebAssembly; CPU physics, WebGL points |
 | Agentic AI workflow helpers | Optional |
 
 ## Controls (visual mode)
@@ -229,7 +231,7 @@ A single local CPU baseline for hydrogen 1s measured sampling/flow respectively:
 50k: 18.6/1.0 ms; 500k: 184.8/8.1 ms; 1M: 382.1/15.8 ms.
 These are indicative wall-clock measurements, not GPU speedup claims.
 
-Later work includes multi-orbital display, scientific data provenance and native Windows build instructions.
+Later work includes scientific data provenance and native Windows build instructions.
 
 ## Accuracy
 
@@ -269,7 +271,9 @@ and disclose approximations. Elementary particles are not assigned invented shap
 - [x] Choose local HTTP/native-worker transport and connect a TypeScript interactive UI.
 - [ ] Add validated models beyond hydrogenic atomic orbitals incrementally.
 - [ ] Add optional orbital sonification: density scan, explicit audio mapping, WAV export.
-- [ ] Add time-dependent state superpositions and interference visualization/sonification.
+- [x] Add normalized two-orbital superpositions and time-dependent interference visualization.
+- [x] Prepare a provisional browser demo with the same C++ physics compiled to WebAssembly.
+- [ ] Extend interference to sonification and validate additional basis/state combinations.
 - [ ] Explore lattice dynamics and phonons as a separate model extension.
 
 The [model scope and contract](docs/model-scope.md) defines the first supported
@@ -279,7 +283,8 @@ Its typed C++ request/result contract is implemented by `OrbitalModel` in the
 CPU or automatic CUDA/CPU selection, stable errors, and atomic-unit current
 updates. Console and viewer execution share the same sampling/flow dispatch.
 The local JSON API and TypeScript UI use that adapter; full clouds stay in C++
-while the browser displays at most 20,000 preview samples. Future models remain
+while the browser displays at most 20,000 preview samples. The UI also supports the validated two-orbital model; see
+[superposition physics and limits](docs/superpositions.md). Future models remain
 unavailable until validated.
 
 Sonification maps simulation data to audible signals; its audio is not literal
@@ -298,7 +303,8 @@ The CUDA compile target uses architecture 75 and is not shipped as a release bin
 Each successful Linux job uploads an installed package containing `bin/atom_sim`,
 `bin/atom_api`, element data, the compiled browser UI and local server, docs,
 README, and a SHA-256 checksum. Test logs are retained for 14 days. A separate
-frontend job runs TypeScript and real-backend browser tests; release delivery
+frontend job builds the pinned WebAssembly toolchain and runs TypeScript, native,
+and browser-engine tests; release delivery
 requires it to pass along with native jobs.
 Pushing a version tag (for example `v1.2.0`) publishes both tested packages to
 GitHub Releases only after all build/test jobs pass. Re-running the tag workflow
@@ -310,8 +316,8 @@ and Mesa/OpenGL runtime libraries; install the viewer dependencies listed above.
 Extract a package, then run `./bin/atom_sim --console` or `--visual`.
 To open the packaged UI, run
 `python3 share/atom_sim/tools/serve.py --binary bin/atom_api` and open its local
-URL. Node is not needed for packaged UI use. Remote frontend deployment remains
-a future step.
+URL. Node is not needed for packaged UI use. The [provisional browser demo guide](docs/browser-demo.md) describes the static
+WebAssembly deployment, browser limits, and build instructions.
 
 The first CI run passed console tests and CUDA compilation/runtime fallback.
 The OpenGL job could not acquire a GitHub-hosted runner; local software-EGL checks

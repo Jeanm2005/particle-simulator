@@ -121,7 +121,7 @@ jobs:
           retention-days: 14
 
   frontend:
-    name: TypeScript UI and local transport
+    name: TypeScript UI, native transport and WebAssembly
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -142,9 +142,18 @@ jobs:
         run: |
           npm ci
           npx playwright install --with-deps chromium
-      - name: Test UI against native backend
+      - name: Install pinned WebAssembly toolchain
+        run: |
+          git clone --depth 1 https://github.com/emscripten-core/emsdk.git "$RUNNER_TEMP/emsdk"
+          "$RUNNER_TEMP/emsdk/emsdk" install 4.0.15
+          "$RUNNER_TEMP/emsdk/emsdk" activate 4.0.15
+      - name: Build provisional browser demo
+        run: EMXX="$RUNNER_TEMP/emsdk/upstream/emscripten/em++" npm --prefix web run build:demo
+      - name: Test UI against native and browser engines
         working-directory: web
-        run: npm test
+        env:
+          QM_TEST_WASM: '1'
+        run: npm exec -- playwright test
       - name: Upload browser diagnostics
         if: always()
         uses: actions/upload-artifact@v6

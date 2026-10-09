@@ -14,10 +14,10 @@ name alone is insufficient to choose equations, interactions, or observables.
 | Model ID | System and inputs | Outputs | Availability and limits |
 |----------|-------------------|---------|-------------------------|
 | `hydrogenic-orbital` | Electron orbital in a fixed central Coulomb model; element Z, n/l/m, pure Z or Slater screening | Probability cloud, orbital density visualization, energy, sampled mean radius, probability-current animation | Implemented in C++; stationary, nonrelativistic model; screening is approximate |
-| `orbital-superposition` | Coherent orbital coefficients, phases, compatible basis, time | Time-dependent density and interference | Planned; needs normalization, evolution, and current validation |
+| `orbital-superposition` | Two distinct pure-Z orbitals, weight, relative phase, time | Resampled time-dependent density, energy expectation, sampled mean radius and Y | Implemented; n ≤ 4, at most 20,000 samples, CPU; density evolution without trajectory/current integration |
 | `lattice-dynamics` | Interacting lattice, masses, force model, boundaries, initial displacement/velocity | Displacements and mode observables | Exploratory; no lattice implementation exists |
 
-Only `hydrogenic-orbital` may be offered as runnable in the first UI. Other
+The UI offers `hydrogenic-orbital` and `orbital-superposition`. Other
 particle categories, including free elementary particles and arbitrary composite
 systems, remain unsupported until they have their own equations and validation.
 Do not turn unsupported particle input into an orbital cloud.
@@ -104,8 +104,8 @@ many-electron solution. Slater screening does not simulate electron interactions
 or excited-state configuration rearrangement.
 
 The implemented model does not include spin dynamics, relativistic corrections,
-external fields, collisions, radiation, nuclear motion, or time-dependent state
-superpositions. Large Z does not remove these limitations. Element metadata,
+external fields, collisions, radiation, or nuclear motion. The separate
+[superposition contract](superpositions.md) adds coherent two-state density evolution. Large Z does not remove these limitations. Element metadata,
 especially the Z = 119 entry, still requires a provenance review; selection in
 the database is not evidence of experimental verification.
 
@@ -121,7 +121,8 @@ Keep equations and validation in the C++ physics layer. The model adapter
 owns validated requests/results and delegates sampling/current operations to the
 compute backend. Rendering consumes results; neither OpenGL nor UI state belongs
 in the model interface. Transport choice (local process, native bridge, or server)
-is a separate decision for the next stage.
+is separate from physics; the local bridge and browser WebAssembly engine both
+use `ApiSession`.
 
 `OrbitalModel::capabilities()` exposes versions, orbital limits, sample limits,
 and units before execution. The typed adapter rejects unknown contract versions,

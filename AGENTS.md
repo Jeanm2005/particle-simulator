@@ -26,6 +26,8 @@ Element records live in `data/elements.json`. Reference inspiration:
 | Probability-current animation | Required; implemented; preserve radius and Y |
 | GPU ray-march path | Implemented; bounded rays, shared density scale, length-aware opacity, matched FOV; representative higher-orbital convergence/software timings verified; hardware performance pending |
 | CUDA acceleration | Implemented; CUDA compilation verified in CI; NVIDIA parity/performance pending |
+| Two-orbital superpositions | Implemented; shared pure-Z Hamiltonian, n <= 4, CPU density snapshots |
+| Provisional browser demo | Shared C++ ApiSession compiled to WebAssembly; each tab owns its state |
 | Agentic workflow helpers | Optional |
 | 2D Bohr model | Out of scope |
 
@@ -145,7 +147,18 @@ coordinates or silently change invalid requests. See `docs/local-ui.md` for
 transport limits, stale-run behavior, and browser tests. Run `npm ci` and
 `npm test` from `web/` after UI changes; CTest covers HTTP transport when Python
 is available. CI requires the frontend job before releasing packages and bundles
-compiled UI assets with the local server. Only the hydrogenic orbital model
-currently runs; future model entries must remain unavailable until validated.
+compiled UI assets with the local server. `ApiSession` is shared with the browser
+WebAssembly engine, which owns independent tab sessions and caps stationary
+samples at 50,000. `SuperpositionModel` adds two distinct pure-Z orbitals (n <= 4,
+at most 20,000 samples); its evolving density snapshots are resampled, not current
+trajectories. Do not apply Slater screening to this shared-Hamiltonian model.
+See `docs/superpositions.md`. Other model entries remain unavailable until validated.
 Audio mappings must be labeled as sonification; isolated orbitals do not emit
 literal audible sound in the current model.
+
+Browser demo checks: install Emscripten 4.0.15, run `npm --prefix web run build:demo`
+from the repository root, then `QM_TEST_WASM=1 npm exec -- playwright test` from
+`web/`. CI runs both native and WebAssembly
+projects. `.openai/hosting.json` binds the provisional Sites deployment; build
+output in `web/site-dist` is generated and ignored. Keep its provisional status
+and remaining hardware/data/model milestones visible.

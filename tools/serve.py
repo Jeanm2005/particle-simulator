@@ -45,17 +45,30 @@ def text(value, field):
 
 
 def sample_command(value):
-    fields(value, ("contractVersion", "model", "element", "state", "screening", "sampleCount", "seed", "backend"))
+    keys = ("contractVersion", "model", "element", "state", "screening", "sampleCount", "seed", "backend")
+    coherent = isinstance(value, dict) and value.get("model") == "orbital-superposition"
+    fields(value, keys + (("superposition",) if coherent else ()))
     fields(value["element"], ("atomicNumber",), "element")
     fields(value["state"], ("n", "l", "m"), "state")
     # These checks prevent lossy conversions. Semantic validation belongs to OrbitalModel.
-    return " ".join(("sample", whole(value["contractVersion"], -2**31, 2**31-1, "contractVersion"),
+    command = " ".join(("sample", whole(value["contractVersion"], -2**31, 2**31-1, "contractVersion"),
                      text(value["model"], "model"),
                      whole(value["element"]["atomicNumber"], -2**31, 2**31-1, "element.atomicNumber"),
                      *(whole(value["state"][key], -2**31, 2**31-1, "state." + key) for key in ("n", "l", "m")),
                      text(value["screening"], "screening"),
                      whole(value["sampleCount"], -2**63, 2**63-1, "sampleCount"),
                      whole(value["seed"], 0, 2**32-1, "seed"), text(value["backend"], "backend")))
+    if coherent:
+        combination = value["superposition"]
+        fields(combination, ("state", "weight", "phase"), "superposition")
+        fields(combination["state"], ("n", "l", "m"), "superposition.state")
+        command += " " + " ".join(whole(combination["state"][key], -2**31, 2**31-1, "superposition.state." + key) for key in ("n", "l", "m"))
+        for key in ("weight", "phase"):
+            value = combination[key]
+            if type(value) not in (int, float) or abs(value) > 1e6 or not math.isfinite(value):
+                raise ApiError("Expected a finite number with magnitude <= 1000000", "superposition." + key)
+            command += " " + repr(value)
+    return command
 
 
 def unique_object(pairs):
