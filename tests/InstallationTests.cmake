@@ -24,6 +24,17 @@ if(NOT EXISTS "${scratch}/H_1s_cloud.xyz")
     message(FATAL_ERROR "Installed console run did not export a cloud")
 endif()
 
+# The graphics-independent worker must use the same relocated database discovery.
+file(WRITE "${scratch}/api-input.txt" "catalog\n")
+execute_process(COMMAND "${CMAKE_COMMAND}" -E env --unset=QM_DATA_DIR
+    "${relocated}/${BIN_DIR}/${API_BINARY_NAME}"
+    WORKING_DIRECTORY "${scratch}" INPUT_FILE "${scratch}/api-input.txt"
+    RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 10)
+string(FIND "${error}" "${data}" found)
+if(NOT result EQUAL 0 OR found EQUAL -1 OR NOT output MATCHES "maxSamples")
+    message(FATAL_ERROR "Relocated API worker failed to load installed JSON: ${output}${error}")
+endif()
+
 
 # Check lookup when argv[0] is a bare command name found through PATH.
 if(NOT CMAKE_HOST_WIN32)

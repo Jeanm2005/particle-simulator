@@ -13,6 +13,12 @@ atom_sim
 
 # Outputs
 *.xyz
+web/node_modules/
+web/dist/
+web/test-results/
+web/playwright-report/
+__pycache__/
+*.pyc
 
 # IDE / local
 .vscode/

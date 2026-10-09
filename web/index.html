@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Orbital lab · Quantum simulator</title>
+  <link rel="stylesheet" href="/style.css">
+  <script type="module" src="/assets/main.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Orbital lab home"><span class="brand-mark">ψ</span> ORBITAL LAB</a>
+    <span class="top-note">QUANTUM / PARTICLE PHYSICS</span>
+    <span id="connection" class="connection">Connecting to local backend…</span>
+  </header>
+  <main>
+    <div class="intro"><div><p class="eyebrow">01 / ATOMIC ORBITALS</p><h1>Explore a quantum state.</h1><p>Choose an element and orbital. See where an electron is likely to be found.</p></div><span class="model-badge">Hydrogenic model</span></div>
+    <div class="workspace">
+      <aside class="controls">
+        <form id="state-form">
+          <fieldset id="setup" disabled>
+            <legend>Define the state</legend>
+            <label for="model">Physics model</label>
+            <select id="model"><option value="hydrogenic-orbital">Hydrogenic orbital</option><option disabled>Orbital superposition · planned</option><option disabled>Lattice dynamics · exploratory</option></select>
+            <label for="element">Element</label>
+            <select id="element"><option>Loading element database…</option></select>
+            <label for="atomic-number">Atomic number Z</label>
+            <input id="atomic-number" name="atomicNumber" type="number" min="1" max="2147483647" step="1" value="1" required>
+            <p class="hint">Custom positive Z uses pure Z when metadata is unavailable.</p>
+            <div class="quantum-grid">
+              <div><label for="n">Principal n</label><input id="n" name="n" type="number" min="1" max="7" step="1" value="1" required></div>
+              <div><label for="l">Angular l</label><input id="l" name="l" type="number" min="0" max="0" step="1" value="0" required></div>
+              <div><label for="m">Magnetic m</label><input id="m" name="m" type="number" min="0" max="0" step="1" value="0" required></div>
+            </div>
+            <label for="screening">Charge model</label>
+            <select id="screening"><option value="pure-z">Pure nuclear Z</option><option value="slater-neutral">Slater screening · approximate</option></select>
+            <div class="pair"><div><label for="samples">Samples</label><input id="samples" name="sampleCount" type="number" min="1" max="1000000" step="1" value="50000" required></div><div><label for="seed">Random seed</label><input id="seed" name="seed" type="number" min="0" max="4294967295" step="1" value="42" required></div></div>
+            <label for="backend">Compute backend</label>
+            <select id="backend"><option value="auto">Automatic · CUDA / CPU</option><option value="cpu">CPU · reproducible stream</option></select>
+            <button id="sample" class="primary" type="submit">Sample orbital <span aria-hidden="true">↗</span></button>
+          </fieldset>
+        </form>
+        <p id="status" class="status" role="status" aria-live="polite">Loading model capabilities…</p>
+        <p id="error" class="error" role="alert" hidden></p>
+        <button id="reconnect" type="button" hidden>Reconnect</button>
+        <div class="model-note"><p class="eyebrow">MODEL LIMITS</p><p>A stationary, nonrelativistic electron orbital in a fixed central potential. Neutral atoms use an approximate orbital model.</p><p>No collisions, radiation, spin dynamics, or external fields.</p></div>
+      </aside>
+      <section class="results" aria-label="Orbital results">
+        <div class="viewer-header"><div><p class="eyebrow">ELECTRON PROBABILITY DENSITY</p><h2 id="active-state">Ready to explore</h2></div><button id="reset-camera" type="button">Reset view</button></div>
+        <div class="canvas-wrap"><canvas id="cloud" tabindex="0" aria-label="3D probability cloud. Drag to orbit, scroll to zoom. Arrow keys rotate; plus and minus zoom."></canvas><div id="empty" class="empty"><span>ψ</span><p>Your orbital will appear here.</p><small>Start with hydrogen 1s, or choose a different state.</small></div><div class="view-caption">Y polar axis · coordinates in a₀</div><p id="renderer-error" class="renderer-error" role="status" hidden></p></div>
+        <div class="viewer-footer"><span>Drag to orbit · scroll to zoom</span><span id="preview">No samples yet</span></div>
+        <div class="metrics">
+          <div><span>Energy <small>eV</small></span><strong id="energy">—</strong></div>
+          <div><span>Mean radius <small>a₀</small></span><strong id="radius">—</strong></div>
+          <div><span>Effective charge</span><strong id="charge">—</strong></div>
+          <div><span>Samples</span><strong id="count">—</strong></div>
+        </div>
+        <div class="flow-panel"><div><h3>Probability current</h3><p id="flow-description">Rotation about Y preserves radius and height.</p></div><div class="flow-controls"><label for="dt">Step Δt <small>atomic units</small></label><input id="dt" type="number" value="0.1" min="-1000" max="1000" step="any" required><button id="step" type="button" disabled>Step</button><button id="play" type="button" disabled aria-pressed="false">Play</button></div><p class="flow-time">Model time: <span id="time">0</span> atomic units · Playback advances one Δt per backend response.</p></div>
+        <p id="execution" class="execution">Execution details will appear after sampling.</p>
+        <p id="interpretation" class="interpretation">Points represent samples of |ψ|². Color and brightness are display mappings; the cloud does not show individual electron trajectories. Mean radius is a sampled estimate.</p>
+      </section>
+    </div>
+    <footer class="page-footer"><span>Validated models first. Broader particle models are coming incrementally.</span><span>LOCAL C++ BACKEND / TYPESCRIPT UI</span></footer>
+  </main>
+</body>
+</html>

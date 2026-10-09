@@ -108,6 +108,8 @@ For a suspected stale binary, configure a fresh build directory and rebuild.
 | Elements / discovery | Element.*, data/elements.json, cmake/DataPaths.hpp.in |
 | CUDA | cuda/*, CMakeLists.txt |
 | Regressions | tests/* |
+| Local transport | src/ApiWorker.cpp, tools/serve.py |
+| TypeScript UI | web/* |
 
 ## Reference mapping
 
@@ -122,7 +124,7 @@ For a suspected stale binary, configure a fresh build directory and rebuild.
 ## Product direction
 
 The intended scope is an interactive quantum/particle physics simulator with a
-proposed TypeScript UI for particle selection and state/parameter input. Atomic
+TypeScript UI for particle selection and state/parameter input. Atomic
 orbitals are the first implemented model, not the full product scope. Expand via
 validated models with explicit observables, interactions, and validity limits;
 do not present arbitrary particle shapes as physical predictions.
@@ -131,12 +133,19 @@ After the CUDA and rendering milestones, track model/backend interfaces, the
 TypeScript UI, broader particle models, orbital density sonification and WAV
 export, time-dependent superpositions, and a possible lattice/phonon extension.
 The scope milestone is documented in `docs/model-scope.md`; use its supported
-model, input, observable, unit, and validity contract for the next transport/UI stage.
+model, input, observable, unit, and validity contract when extending the adapter/UI.
 `OrbitalModel` / `qm_model` implement the typed C++ adapter; `ComputeDispatch.cpp`
 shares CPU/CUDA sampling and flow with Simulation and Engine. Adapter regressions
 cover validation, screening, seeds, metadata, and atomic flow; dispatch regressions
-inject CUDA failures to verify runtime fallback on CPU-only CI. No JSON API exists.
-Only the hydrogenic orbital
-model currently runs; future model entries must remain unavailable until validated.
+inject CUDA failures to verify runtime fallback on CPU-only CI.
+`atom_api` and `tools/serve.py` expose the local JSON API used by the TypeScript
+UI in `web/`. The worker owns one active full cloud; browser responses contain
+at most 20,000 preview samples. Keep physics in C++ and do not trust client
+coordinates or silently change invalid requests. See `docs/local-ui.md` for
+transport limits, stale-run behavior, and browser tests. Run `npm ci` and
+`npm test` from `web/` after UI changes; CTest covers HTTP transport when Python
+is available. CI requires the frontend job before releasing packages and bundles
+compiled UI assets with the local server. Only the hydrogenic orbital model
+currently runs; future model entries must remain unavailable until validated.
 Audio mappings must be labeled as sonification; isolated orbitals do not emit
 literal audible sound in the current model.

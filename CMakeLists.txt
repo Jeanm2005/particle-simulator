@@ -97,6 +97,7 @@ if(BUILD_TESTING)
         "-DDATA_DIR=${CMAKE_INSTALL_DATADIR}"
         "-DCONFIG=$<CONFIG>"
         "-DBINARY_NAME=$<TARGET_FILE_NAME:atom_sim>"
+        "-DAPI_BINARY_NAME=$<TARGET_FILE_NAME:atom_api>"
         -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/InstallationTests.cmake")
 endif()
 
@@ -137,7 +138,16 @@ add_library(qm_model STATIC src/OrbitalModel.cpp src/Element.cpp src/QuantumMath
     src/Orbital.cpp src/RadialSampler.cpp src/Simulation.cpp)
 target_include_directories(qm_model PUBLIC include PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
 target_link_libraries(qm_model PUBLIC qm_compute)
+add_executable(atom_api src/ApiWorker.cpp)
+target_link_libraries(atom_api PRIVATE qm_model)
+install(TARGETS atom_api DESTINATION ${CMAKE_INSTALL_BINDIR})
 if(BUILD_TESTING)
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME transport_regressions COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/TransportTests.py" "$<TARGET_FILE:atom_api>")
+        set_tests_properties(transport_regressions PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+    endif()
     add_executable(model_tests tests/ModelTests.cpp)
     target_link_libraries(model_tests PRIVATE qm_model)
     add_test(NAME model_regressions COMMAND model_tests)

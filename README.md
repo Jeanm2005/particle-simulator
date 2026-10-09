@@ -1,6 +1,7 @@
 # Quantum Atom Simulator
 
-Interactive **3D** quantum orbital visualiser in modern C++.
+Interactive **3D** quantum orbital visualiser in modern C++, with a native
+OpenGL viewer and a TypeScript browser interface.
 
 Exact hydrogenic wavefunctions from the Schrödinger equation, scaled by nuclear
 charge \(Z\) or Slater \(Z_\text{eff}\), so the same code works for **any element**.
@@ -44,6 +45,7 @@ This project extends that direction with:
 | Probability-current flow (key **P**) | Done |
 | GPU volumetric raytracer (key **T**) | Done |
 | **CUDA** parallel sampling & updates | Implemented; GPU validation pending |
+| TypeScript orbital UI and local JSON transport | Implemented; C++ sampling/current, WebGL point preview |
 | Agentic AI workflow helpers | Optional |
 
 ## Controls (visual mode)
@@ -126,6 +128,20 @@ ctest --test-dir build-console --output-on-failure
 ./build/atom_sim --console
 ```
 
+For the local browser interface (Python 3.10+ and Node.js 22+):
+
+```bash
+npm --prefix web ci
+npm --prefix web run build
+python3 tools/serve.py --binary build/atom_api
+```
+
+Open `http://127.0.0.1:8000`. Choose an element/state, sample its probability
+cloud, orbit/zoom the preview, and step or play probability current through C++.
+The server also works with a console-only native build. See the
+[local UI and JSON transport guide](docs/local-ui.md) for controls, tests, units,
+preview limits, and the single-active-run behavior.
+
 Both modes prompt for the element, orbital, and screening choice. Nonspherical
 orbitals also prompt for integer m. Running without an option prompts for the mode
 when graphics support is compiled. `--help` lists the command-line options.
@@ -176,6 +192,8 @@ atoms/
 ├── data/elements.json    # entries Z = 1 … 119
 ├── include/              # public headers
 ├── src/                  # implementations
+├── tools/serve.py        # loopback UI server and native worker bridge
+├── web/                  # TypeScript UI, point renderer, and browser tests
 └── tests/                # physics, input, and installation regressions
 ```
 
@@ -238,7 +256,7 @@ for the sampling method, local baseline, and remaining validation.
 The intended product is an interactive quantum and particle physics simulator:
 users choose a supported particle or enter its defining state/parameters, then
 explore its modeled behavior and visual representation. A TypeScript UI is the
-proposed interface; the current implementation is a C++ atomic-orbital prototype.
+implemented interface for the current C++ atomic-orbital model.
 
 Coverage must grow through explicit, validated physics models. Arbitrary particle
 input alone cannot determine dynamics: the model also needs interactions, initial
@@ -248,7 +266,7 @@ and disclose approximations. Elementary particles are not assigned invented shap
 
 - [x] Define supported particle categories, inputs, observables, and model validity.
 - [x] Implement a graphics-independent orbital model/backend adapter with validated requests and execution metadata.
-- [ ] Choose frontend transport and connect a TypeScript interactive UI.
+- [x] Choose local HTTP/native-worker transport and connect a TypeScript interactive UI.
 - [ ] Add validated models beyond hydrogenic atomic orbitals incrementally.
 - [ ] Add optional orbital sonification: density scan, explicit audio mapping, WAV export.
 - [ ] Add time-dependent state superpositions and interference visualization/sonification.
@@ -260,7 +278,9 @@ Its typed C++ request/result contract is implemented by `OrbitalModel` in the
 `qm_model` CMake target, with a 1,000,000-sample limit, configurable seed, explicit
 CPU or automatic CUDA/CPU selection, stable errors, and atomic-unit current
 updates. Console and viewer execution share the same sampling/flow dispatch.
-No JSON API or TypeScript UI exists yet. Future models remain unavailable until validated.
+The local JSON API and TypeScript UI use that adapter; full clouds stay in C++
+while the browser displays at most 20,000 preview samples. Future models remain
+unavailable until validated.
 
 Sonification maps simulation data to audible signals; its audio is not literal
 sound emitted by an isolated orbital. Phonons require interacting lattice atoms,
@@ -276,7 +296,10 @@ it tests runtime CPU fallback; GPU parity/performance validation remains pending
 The CUDA compile target uses architecture 75 and is not shipped as a release binary.
 
 Each successful Linux job uploads an installed package containing `bin/atom_sim`,
-element data, README, and a SHA-256 checksum. Test logs are retained for 14 days.
+`bin/atom_api`, element data, the compiled browser UI and local server, docs,
+README, and a SHA-256 checksum. Test logs are retained for 14 days. A separate
+frontend job runs TypeScript and real-backend browser tests; release delivery
+requires it to pass along with native jobs.
 Pushing a version tag (for example `v1.2.0`) publishes both tested packages to
 GitHub Releases only after all build/test jobs pass. Re-running the tag workflow
 updates assets on its existing release. No custom credentials are required;
@@ -285,7 +308,10 @@ only the release job receives repository write permission.
 Packages target Ubuntu 24.04 x86_64. The OpenGL package requires GLFW, GLEW, GLM,
 and Mesa/OpenGL runtime libraries; install the viewer dependencies listed above.
 Extract a package, then run `./bin/atom_sim --console` or `--visual`.
-The TypeScript UI has not been implemented, so frontend deployment is a future step.
+To open the packaged UI, run
+`python3 share/atom_sim/tools/serve.py --binary bin/atom_api` and open its local
+URL. Node is not needed for packaged UI use. Remote frontend deployment remains
+a future step.
 
 The first CI run passed console tests and CUDA compilation/runtime fallback.
 The OpenGL job could not acquire a GitHub-hosted runner; local software-EGL checks

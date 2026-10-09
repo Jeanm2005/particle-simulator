@@ -1,9 +1,10 @@
 # Supported models and product contract
 
 Status: the scope milestone and typed C++ orbital adapter are implemented.
-`qm_model` exposes `OrbitalModel` in `include/OrbitalModel.hpp`; no JSON transport
-or TypeScript application exists yet. The executable entry points remain the
-C++ console and OpenGL viewer.
+`qm_model` exposes `OrbitalModel` in `include/OrbitalModel.hpp`. The local JSON
+transport and TypeScript orbital UI now use this adapter; see
+[the local UI guide](local-ui.md). C++ console and OpenGL viewer entry points
+remain available.
 
 ## Model catalog
 
@@ -45,7 +46,7 @@ must identify missing metadata. Slater mode requires an expanded configuration
 whose electron count matches Z and an occupied selected Slater group. A failure
 must explain that pure Z is available without silently changing the request.
 
-Example proposed request (not currently accepted by `atom_sim`):
+Example `POST /api/sample` request (the interactive `atom_sim` does not parse JSON):
 
 ```json
 {
@@ -125,8 +126,8 @@ is a separate decision for the next stage.
 `OrbitalModel::capabilities()` exposes versions, orbital limits, sample limits,
 and units before execution. The typed adapter rejects unknown contract versions,
 model IDs, enum values, invalid states, nonfinite current inputs, and requests
-above its declared resource limit. Integers use C++ integer types; a future
-transport parser must reject unknown fields, fractional inputs, and overflow
+above its declared resource limit. Integers use C++ integer types; the JSON
+transport parser rejects unknown fields, fractional inputs, and overflow
 before conversion to these types.
 Validation precedes sampler construction and allocation. Numerical failures must
 return an error rather than nonfinite results or a partial cloud.
@@ -157,7 +158,8 @@ remain separate open validation tasks for the existing implementation.
 
 Gates 1–3 are implemented and covered by `model_regressions` and
 `dispatch_regressions`. The latter uses a failing CUDA provider to exercise
-runtime fallback on CPU-only machines. Gate 4 (transport and UI) is next.
+runtime fallback on CPU-only machines. Gate 4 is implemented by the local HTTP
+server, native worker, and TypeScript UI, with HTTP integration and browser tests.
 
 ### C++ adapter use
 
