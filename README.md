@@ -193,7 +193,7 @@ atoms/
 ├── README.md
 ├── AGENTS.md
 ├── cmake/                # generated data-path configuration template
-├── data/elements.json    # entries Z = 1 … 119
+├── data/elements.json    # entries Z = 1 … 118
 ├── include/              # public headers
 ├── src/                  # implementations
 ├── tools/serve.py        # loopback UI server and native worker bridge
@@ -201,8 +201,11 @@ atoms/
 └── tests/                # physics, input, and installation regressions
 ```
 
-The dataset includes an entry for Z = 119. Its scientific metadata and the other
-element records still need a provenance review.
+The [element-data audit](docs/element-data.md) records sources and limits for
+Z = 1 through 118. Standard atomic weights use CIAAW abridged values; zero means
+unavailable. Neutral configurations are checked against NIST through Z = 92;
+higher-Z configurations are withheld, so those entries require pure Z.
+Custom positive Z, including 119, remains available without catalog metadata.
 
 ## Roadmap
 
@@ -233,7 +236,7 @@ A single local CPU baseline for hydrogen 1s measured sampling/flow respectively:
 50k: 18.6/1.0 ms; 500k: 184.8/8.1 ms; 1M: 382.1/15.8 ms.
 These are indicative wall-clock measurements, not GPU speedup claims.
 
-Later work includes scientific data provenance and native Windows build instructions.
+Later work includes extending sourced configuration coverage and native Windows build instructions.
 
 ## Accuracy
 
@@ -280,8 +283,8 @@ and disclose approximations. Elementary particles are not assigned invented shap
 
 Next steps, in recommended order:
 
-1. Audit element-data provenance, including the provisional Z = 119 record;
-   numerical input validation does not establish scientific provenance.
+1. Element-data provenance audit completed for the documented coverage; extend
+   sourced configurations above Z = 92 before enabling their Slater screening.
 2. Run NVIDIA parity/throughput and full-window hardware-renderer measurements
    when suitable hardware is available; retain the existing fallback behavior.
 3. Implement optional density sonification and WAV export with a documented

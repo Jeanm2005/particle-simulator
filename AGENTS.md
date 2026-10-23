@@ -14,7 +14,10 @@ C++17 quantum orbital visualiser with hydrogenic radial/angular wavefunctions,
 CDF sampling, nuclear Z or configuration-based Slater screening, and GLFW +
 OpenGL 3.3 point-cloud and fragment-shader ray-march rendering.
 
-Element records live in `data/elements.json`. Reference inspiration:
+Element records live in `data/elements.json` (Z = 1–118). See `docs/element-data.md`
+for CIAAW weights, NIST configurations through Z = 92, and unavailable metadata.
+Do not restore unsourced masses/configurations or a speculative Z = 119 record.
+Reference inspiration:
 [kavan010/Atoms](https://github.com/kavan010/Atoms).
 
 ## Requirements

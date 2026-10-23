@@ -17,7 +17,7 @@ execute_process(COMMAND "${CMAKE_COMMAND}" -E env --unset=QM_DATA_DIR "${binary}
     WORKING_DIRECTORY "${scratch}" INPUT_FILE "${scratch}/input.txt"
     RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 10)
 string(FIND "${error}" "${data}" found)
-if(NOT result EQUAL 0 OR found EQUAL -1 OR NOT error MATCHES "Loaded 119 elements")
+if(NOT result EQUAL 0 OR found EQUAL -1 OR NOT error MATCHES "Loaded 118 elements")
     message(FATAL_ERROR "Relocated binary did not load installed JSON: ${output}${error}")
 endif()
 if(NOT EXISTS "${scratch}/H_1s_cloud.xyz")

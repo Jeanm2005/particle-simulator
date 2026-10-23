@@ -30,7 +30,7 @@ template<class F> void rejects(F operation) {
 int main() {
     try {
         qm::ElementDatabase database;
-        require(database.size() == 119, "Regression test requires full element JSON");
+        require(database.size() == 118, "Regression test requires full element JSON");
         qm::ElementDatabase missing("nonexistent-test-elements.json");
         require(missing.size() == 6, "Explicit missing path must use emergency fallback");
         // Explicit malformed databases must fall back rather than truncate Z or cast nonfinite values.
@@ -51,6 +51,10 @@ int main() {
             qm::ElementDatabase malformed(fixture.string());
             require(malformed.findByZ(1)->atomic_mass == 0.0, "Invalid atomic mass was accepted");
         }
+        require(!database.findByZ(119), "Unverified Z=119 metadata must not be catalogued");
+        require(database.findByZ(118)->config.empty(), "Unverified configuration must be unavailable");
+        rejects([&] { qm::slaterZeff(118, 7, 1, database.findByZ(118)->config); });
+        require(database.findByZ(43)->atomic_mass == 0.0, "Isotope mass number is not a standard atomic weight");
         auto gold = database.findByZ(79).value();
         near(qm::slaterZeff(79, 6, 0, gold.config), 3.7);
         near(qm::slaterZeff(1, 1, 0, "1s1"), 1.0);

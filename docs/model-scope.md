@@ -105,9 +105,10 @@ or excited-state configuration rearrangement.
 
 The implemented model does not include spin dynamics, relativistic corrections,
 external fields, collisions, radiation, or nuclear motion. The separate
-[superposition contract](superpositions.md) adds coherent two-state density evolution. Large Z does not remove these limitations. Element metadata,
-especially the Z = 119 entry, still requires a provenance review; selection in
-the database is not evidence of experimental verification.
+[superposition contract](superpositions.md) adds coherent two-state density evolution. Large Z does not remove these limitations. Element metadata has [documented source coverage](element-data.md): the catalog
+ends at Z = 118, standard atomic weights may be unavailable (zero), and neutral
+configurations above Z = 92 are withheld pending a source review. Custom positive
+Z remains a mathematical model input, not evidence of experimental verification.
 
 Sampling uses finite tabulated CDFs and a bounded radial domain. The ray marcher
 uses a finite-step visual approximation. The UI must keep quantitative sampled
