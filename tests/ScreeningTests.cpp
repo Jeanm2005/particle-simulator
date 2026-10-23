@@ -4,6 +4,9 @@
 #include "Simulation.hpp"
 
 #include <cmath>
+#include <chrono>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <limits>
 #include <regex>
@@ -30,6 +33,24 @@ int main() {
         require(database.size() == 119, "Regression test requires full element JSON");
         qm::ElementDatabase missing("nonexistent-test-elements.json");
         require(missing.size() == 6, "Explicit missing path must use emergency fallback");
+        // Explicit malformed databases must fall back rather than truncate Z or cast nonfinite values.
+        const auto fixture = std::filesystem::temp_directory_path() /
+            ("atoms-invalid-elements-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".json");
+        struct Cleanup {
+            std::filesystem::path path;
+            ~Cleanup() { std::error_code error; std::filesystem::remove(path, error); }
+        } cleanup{fixture};
+        for (const char* z : {"1.5", "1junk", "1e100", "NaN", "2147483648", "0", "-1"}) {
+            { std::ofstream out(fixture); out << "[{\"Z\":" << z << ",\"symbol\":\"Bad\"}]"; }
+            qm::ElementDatabase malformed(fixture.string());
+            require(malformed.size() == 6 && !malformed.findBySymbol("Bad"),
+                    "Malformed atomic number did not trigger fallback");
+        }
+        for (const char* mass : {"-1", "1e999", "NaN", "1junk"}) {
+            { std::ofstream out(fixture); out << "[{\"Z\":1,\"symbol\":\"Test\",\"atomic_mass\":\"" << mass << "\"}]"; }
+            qm::ElementDatabase malformed(fixture.string());
+            require(malformed.findByZ(1)->atomic_mass == 0.0, "Invalid atomic mass was accepted");
+        }
         auto gold = database.findByZ(79).value();
         near(qm::slaterZeff(79, 6, 0, gold.config), 3.7);
         near(qm::slaterZeff(1, 1, 0, "1s1"), 1.0);
@@ -69,6 +90,8 @@ int main() {
         rejects([] { qm::slaterZeff(2, 1, 0, "1s1"); });
         rejects([] { qm::slaterZeff(1, 2, 1, "1s1"); });
         rejects([] { qm::slaterZeff(1, 1, 0, "1s3"); });
+        rejects([] { qm::slaterZeff(4, 1, 0, "1s2 1s2"); });
+        rejects([] { qm::slaterZeff(2, 1, 0, "1s1 1s1"); });
         rejects([] { qm::slaterZeff(1, 1, 1, "1s1"); });
         for (double charge : {0.0, -10.6, std::numeric_limits<double>::infinity(),
                               std::numeric_limits<double>::quiet_NaN()})

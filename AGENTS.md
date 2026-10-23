@@ -60,6 +60,8 @@ Keep README status accurate; do not claim measured acceleration before benchmark
 - Slater screening requires an expanded neutral configuration and an occupied
   Slater group. Unoccupied groups and unknown configurations require pure Z.
 - Reject invalid inputs and nonfinite distributions before sampling.
+- Parse element atomic numbers as positive in-range integers; invalid mass metadata
+  uses zero. Reject duplicate subshells before computing Slater screening.
 - Preserve `QM_HAS_OPENGL` guards so console builds need no graphics dependencies.
 
 ## Build and test
@@ -91,6 +93,8 @@ For a suspected stale binary, configure a fresh build directory and rebuild.
 ## Workflow
 
 - Complete, verify, and commit each agreed step; report the hash for the user to push.
+- Use the user's configured Git identity as author and committer, with no AI
+  co-author attribution. Leave pushing to the user.
 - Keep commits focused and avoid unrelated rewrites.
 - Keep README and these instructions synchronized when behavior changes.
 - GitHub Actions builds/tests console and OpenGL paths, requires offscreen shader

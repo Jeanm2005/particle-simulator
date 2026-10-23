@@ -94,6 +94,8 @@ JSON. The selected ns/np, nd, or nf group must be occupied. For unoccupied group
 or custom elements without a configuration, select pure Z instead. Screening is
 an approximation; it does not model excited-state electron rearrangements.
 Invalid sampler parameters and nonfinite distributions are rejected with errors.
+Element data rejects fractional or out-of-range atomic numbers, uses zero for
+invalid mass metadata, and rejects duplicate subshell entries during screening.
 
 Run the screening and sampling regressions with `ctest --test-dir build --output-on-failure`.
 
@@ -276,6 +278,17 @@ and disclose approximations. Elementary particles are not assigned invented shap
 - [ ] Extend interference to sonification and validate additional basis/state combinations.
 - [ ] Explore lattice dynamics and phonons as a separate model extension.
 
+Next steps, in recommended order:
+
+1. Audit element-data provenance, including the provisional Z = 119 record;
+   numerical input validation does not establish scientific provenance.
+2. Run NVIDIA parity/throughput and full-window hardware-renderer measurements
+   when suitable hardware is available; retain the existing fallback behavior.
+3. Implement optional density sonification and WAV export with a documented
+   mapping and numerical/audio checks, then extend it to interference.
+4. Add the next independently validated physics model; keep lattice/phonon work
+   exploratory until interactions, boundaries, and observables are specified.
+
 The [model scope and contract](docs/model-scope.md) defines the first supported
 model, validated inputs, units, output meanings, and required UI disclosures.
 Its typed C++ request/result contract is implemented by `OrbitalModel` in the
@@ -319,8 +332,8 @@ To open the packaged UI, run
 URL. Node is not needed for packaged UI use. The [provisional browser demo guide](docs/browser-demo.md) describes the static
 WebAssembly deployment, browser limits, and build instructions.
 
-The first CI run passed console tests and CUDA compilation/runtime fallback.
-The OpenGL job could not acquire a GitHub-hosted runner; local software-EGL checks
-provide rendering coverage, but a successful remote OpenGL run remains pending.
-Branch protection can then require `Linux (console)`, `Linux (opengl)`,
-and `CUDA compile and CPU runtime fallback` before merging.
+The [CI run for d60ae84](https://github.com/Jeanm2005/particle-simulator/actions/runs/37868173667)
+passed Linux console, OpenGL/software-EGL, CUDA compilation/runtime fallback,
+and native/WebAssembly browser tests on October 9, 2026. This verifies software
+rendering and CUDA fallback; NVIDIA runtime parity and hardware GPU performance
+remain pending. Branch protection can require all four build/test jobs before merging.

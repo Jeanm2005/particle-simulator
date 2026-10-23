@@ -1,6 +1,8 @@
 #include "Element.hpp"
 
 #include <algorithm>
+#include <charconv>
+#include <cmath>
 #include <cctype>
 #include <fstream>
 #include <iostream>
@@ -155,9 +157,9 @@ bool ElementDatabase::loadFromJson(const std::string& path) {
         if (zStr.empty()) continue;
 
         Element e;
-        try {
-            e.Z = static_cast<int>(std::stod(zStr));
-        } catch (...) { continue; }
+        const auto parsed = std::from_chars(zStr.data(), zStr.data() + zStr.size(), e.Z);
+        if (parsed.ec != std::errc{} || parsed.ptr != zStr.data() + zStr.size() || e.Z <= 0)
+            throw std::runtime_error("Atomic number must be a positive in-range integer");
 
         e.symbol = extractValue(obj, "symbol");
         e.name   = extractValue(obj, "name");
@@ -167,7 +169,11 @@ bool ElementDatabase::loadFromJson(const std::string& path) {
 
         std::string massStr = extractValue(obj, "atomic_mass");
         try {
-            e.atomic_mass = massStr.empty() ? 0.0 : std::stod(massStr);
+            std::size_t consumed = 0;
+            e.atomic_mass = massStr.empty() ? 0.0 : std::stod(massStr, &consumed);
+            if ((!massStr.empty() && consumed != massStr.size()) ||
+                !std::isfinite(e.atomic_mass) || e.atomic_mass < 0.0)
+                e.atomic_mass = 0.0;
         } catch (...) {
             e.atomic_mass = 0.0;
         }

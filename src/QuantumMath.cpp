@@ -6,6 +6,7 @@
 #include <sstream>
 #include <regex>
 #include <map>
+#include <set>
 #include <stdexcept>
 
 namespace qm {
@@ -107,6 +108,7 @@ double slaterZeff(int Z, int n, int l, const std::string& configuration) {
 
     // Slater groups combine ns and np; nd, nf, ... are separate groups.
     std::map<std::pair<int, int>, int> groups;
+    std::set<std::pair<int, int>> subshells;
     std::istringstream input(configuration);
     const std::regex orbital(R"((\d+)([spdfgh])(\d+))");
     std::string token;
@@ -120,6 +122,8 @@ double slaterZeff(int Z, int n, int l, const std::string& configuration) {
         int count = std::stoi(match[3].str());
         if (shell < 1 || shell > 100 || angular >= shell || count < 1 || count > 2 * (2 * angular + 1))
             throw std::invalid_argument("Invalid electron configuration for screening");
+        if (!subshells.emplace(shell, angular).second)
+            throw std::invalid_argument("Duplicate subshell in electron configuration");
         groups[{shell, angular <= 1 ? 0 : angular}] += count;
         electrons += count;
     }
