@@ -44,7 +44,7 @@ This project extends that direction with:
 | Dual CDF sampling | Done |
 | Probability-current flow (key **P**) | Done |
 | GPU volumetric raytracer (key **T**) | Done |
-| **CUDA** parallel sampling & updates | Implemented; GPU validation pending |
+| **CUDA** parallel sampling & updates | Validated on RTX 5080 Laptop GPU; sampling faster, host-return flow slower |
 | TypeScript orbital UI and local JSON transport | Implemented; C++ sampling/current, WebGL point preview |
 | Two-orbital time-dependent interference | Implemented; pure-Z, n ≤ 4, density snapshots |
 | Provisional browser demo | C++ compiled to WebAssembly; CPU physics, WebGL points |
@@ -214,7 +214,7 @@ Custom positive Z, including 119, remains available without catalog metadata.
 - [x] Repair documentation, installed data discovery, and export/shader errors.
 - [x] Implement CUDA sampling and flow kernels with CPU fallback and parity/benchmark runner.
 - [x] Validate CUDA compilation and CPU runtime fallback in CI.
-- [ ] Validate numerical parity and performance on NVIDIA hardware.
+- [x] Validate representative numerical parity and performance on RTX 5080 Laptop GPU; see [CUDA measurements](docs/cuda-measurements.md).
 - [x] Match ray-march camera projection, bound rays to orbital size, and use consistent density/opacity.
 - [x] Measure representative higher-orbital convergence and software-renderer performance; tune stepping.
 - [ ] Validate full-window renderer performance on hardware GPUs.
@@ -230,8 +230,10 @@ it does not yet use CUDA/OpenGL interop or persistent device buffers.
 Run `./build/compute_tests --cuda` for numerical checks and end-to-end CPU/GPU
 timings at 50k, 500k, and 1M particles. CTest marks CUDA parity skipped without a
 usable device. CUDA compilation and CPU runtime fallback passed the first GitHub Actions run
-in the CUDA development container. GPU measurements remain unverified in the
-current development environment (no nvcc and blocked NVIDIA device access).
+in the CUDA development container. Representative GPU parity checks and warmed dispatch measurements passed on
+an RTX 5080 Laptop GPU under WSL2 on 2026-10-23. See
+[CUDA measurements](docs/cuda-measurements.md) for raw results, timing boundaries,
+and limitations. Sampling improved; host-return flow remained slower than CPU.
 A single local CPU baseline for hydrogen 1s measured sampling/flow respectively:
 50k: 18.6/1.0 ms; 500k: 184.8/8.1 ms; 1M: 382.1/15.8 ms.
 These are indicative wall-clock measurements, not GPU speedup claims.
@@ -285,8 +287,8 @@ Next steps, in recommended order:
 
 1. Element-data provenance audit completed for the documented coverage; extend
    sourced configurations above Z = 92 before enabling their Slater screening.
-2. Run NVIDIA parity/throughput and full-window hardware-renderer measurements
-   when suitable hardware is available; retain the existing fallback behavior.
+2. NVIDIA parity/throughput measured on RTX 5080 Laptop GPU; reduce flow transfer
+   overhead before claiming flow acceleration. Complete full-window renderer measurements.
 3. Implement optional density sonification and WAV export with a documented
    mapping and numerical/audio checks, then extend it to interference.
 4. Add the next independently validated physics model; keep lattice/phonon work
@@ -313,7 +315,7 @@ which the existing model does not simulate.
 `v*` tags, and manual dispatch. It builds and tests Linux console and OpenGL modes
 with CUDA disabled, requires software-EGL shader coverage, and separately compiles
 the CUDA backend in a CUDA 12.6 development container. That container has no GPU:
-it tests runtime CPU fallback; GPU parity/performance validation remains pending.
+it tests runtime CPU fallback; representative GPU parity/performance was measured locally on RTX 5080 Laptop GPU.
 The CUDA compile target uses architecture 75 and is not shipped as a release binary.
 
 Each successful Linux job uploads an installed package containing `bin/atom_sim`,
@@ -338,5 +340,5 @@ WebAssembly deployment, browser limits, and build instructions.
 The [CI run for d60ae84](https://github.com/Jeanm2005/particle-simulator/actions/runs/37868173667)
 passed Linux console, OpenGL/software-EGL, CUDA compilation/runtime fallback,
 and native/WebAssembly browser tests on October 9, 2026. This verifies software
-rendering and CUDA fallback; NVIDIA runtime parity and hardware GPU performance
-remain pending. Branch protection can require all four build/test jobs before merging.
+rendering and CUDA fallback. Separate local NVIDIA runtime measurements are
+recorded in [CUDA measurements](docs/cuda-measurements.md). Branch protection can require all four build/test jobs before merging.

@@ -28,7 +28,7 @@ Reference inspiration:
 | OpenGL point cloud, camera, live n/l/m | Required; implemented |
 | Probability-current animation | Required; implemented; preserve radius and Y |
 | GPU ray-march path | Implemented; bounded rays, shared density scale, length-aware opacity, matched FOV; representative higher-orbital convergence/software timings verified; hardware performance pending |
-| CUDA acceleration | Implemented; CUDA compilation verified in CI; NVIDIA parity/performance pending |
+| CUDA acceleration | Implemented; CI compilation/fallback verified; RTX 5080 parity/timings measured (sampling faster, flow slower) |
 | Two-orbital superpositions | Implemented; shared pure-Z Hamiltonian, n <= 4, CPU density snapshots |
 | Provisional browser demo | Shared C++ ApiSession compiled to WebAssembly; each tab owns its state |
 | Agentic workflow helpers | Optional |
@@ -48,8 +48,10 @@ CUDA kernels and `QM_ENABLE_CUDA` now exist. CPU fallback is required both at
 build time and runtime. `compute_tests --cuda` runs parity checks and end-to-end
 performance measurements; it skips without a usable device.
 CUDA compilation and CPU fallback passed GitHub Actions in its CUDA container.
-NVIDIA runtime validation is still pending: the current environment lacks nvcc
-and device access.
+Representative NVIDIA runtime parity and warmed dispatch timings passed on
+RTX 5080 Laptop GPU under WSL2 with CUDA 13.4 on 2026-10-23. See
+`docs/cuda-measurements.md`. Sampling improved; allocation/transfer-inclusive flow
+was slower than CPU. Other devices and workloads remain unmeasured.
 Keep README status accurate; do not claim measured acceleration before benchmarking.
 
 ## Architecture and physics
@@ -103,7 +105,7 @@ For a suspected stale binary, configure a fresh build directory and rebuild.
 - GitHub Actions builds/tests console and OpenGL paths, requires offscreen shader
   coverage, and compiles CUDA in a development container while testing CPU fallback.
 - Successful `v*` tag runs publish tested Linux packages and checksums to GitHub
-  Releases. GPU runtime parity and performance still require NVIDIA hardware.
+  Releases. GPU runtime results are documented for RTX 5080 Laptop GPU; other hardware remains unmeasured.
 - Keep `.github/workflows/ci.yml` synchronized with build and test requirements.
 
 ## File ownership

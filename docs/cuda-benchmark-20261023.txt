@@ -1,0 +1,11 @@
+50000 particles: sample GPU 133.412 ms, CPU 7.42213 ms; flow GPU 2.02815 ms, CPU 0.374029 ms (GPU includes allocations/transfers)
+500000 particles: sample GPU 14.4417 ms, CPU 82.7361 ms; flow GPU 11.1095 ms, CPU 3.65615 ms (GPU includes allocations/transfers)
+1000000 particles: sample GPU 27.6294 ms, CPU 153.152 ms; flow GPU 20.5264 ms, CPU 6.94907 ms (GPU includes allocations/transfers)
+CUDA sampling statistics and CPU/GPU flow parity passed
+Dispatch benchmark: H 1s, 2 warmups, 7 measured repetitions; median/min/max ms; allocations, validation and transfers included
+count=50000 backend=cpu sample median=7.86953 min=7.54548 max=10.1392 flow median=0.541129 min=0.496332 max=0.598321
+count=50000 backend=cuda sample median=1.05303 min=0.96015 max=1.23088 flow median=1.44756 min=1.33339 max=1.52905
+count=500000 backend=cpu sample median=78.6086 min=77.5557 max=80.9846 flow median=6.71788 min=6.40726 max=7.18329
+count=500000 backend=cuda sample median=6.83384 min=6.00149 max=7.62427 flow median=12.457 min=9.8754 max=14.1894
+count=1000000 backend=cpu sample median=164.926 min=162.057 max=167.804 flow median=20.7093 min=20.6115 max=23.4989
+count=1000000 backend=cuda sample median=18.6688 min=17.499 max=19.3931 flow median=26.9101 min=25.9772 max=30.2793

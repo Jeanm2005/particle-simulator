@@ -2,6 +2,8 @@
 #include "QuantumMath.hpp"
 #include "Constants.hpp"
 #include <chrono>
+#include <algorithm>
+#include <vector>
 #include <cmath>
 #include <iostream>
 #include <random>
@@ -10,11 +12,51 @@
 namespace {
 void require(bool ok, const char* message) { if (!ok) throw std::runtime_error(message); }
 double radius(const std::array<double,3>& p) { return std::hypot(std::hypot(p[0],p[1]),p[2]); }
+// Time the application dispatch boundary, including validation, allocations and transfers.
+void benchmarkDispatch() {
+    qm::RadialSampler radial(1, 0, 1);
+    qm::AngularSampler angular(0, 0);
+    auto summarize = [](std::vector<double> values) {
+        std::sort(values.begin(), values.end());
+        std::cout << values[values.size()/2] << " min=" << values.front() << " max=" << values.back();
+    };
+    std::cout << "Dispatch benchmark: H 1s, 2 warmups, 7 measured repetitions; median/min/max ms; allocations, validation and transfers included\n";
+    for (auto count : {50000u, 500000u, 1000000u}) {
+        for (auto backend : {qm::BackendPreference::Cpu, qm::BackendPreference::Auto}) {
+            std::vector<double> sampling, flow;
+            for (int repeat = -2; repeat < 7; ++repeat) {
+                qm::Cloud cloud;
+                std::mt19937 generator(42);
+                auto start = std::chrono::steady_clock::now();
+                const auto sampled = qm::sampleCloud(radial, angular, count, generator, cloud, backend);
+                auto middle = std::chrono::steady_clock::now();
+                const auto advanced = qm::advanceCloud(cloud, 1, 0.01, backend);
+                auto finish = std::chrono::steady_clock::now();
+                const std::string expected = backend == qm::BackendPreference::Cpu ? "cpu" : "cuda";
+                require(sampled.backend == expected && advanced.backend == expected,
+                        "Benchmark unexpectedly fell back from requested backend");
+                if (repeat >= 0) {
+                    sampling.push_back(std::chrono::duration<double, std::milli>(middle-start).count());
+                    flow.push_back(std::chrono::duration<double, std::milli>(finish-middle).count());
+                }
+            }
+            std::cout << "count=" << count << " backend=" << (backend == qm::BackendPreference::Cpu ? "cpu" : "cuda") << " sample median=";
+            summarize(sampling); std::cout << " flow median="; summarize(flow); std::cout << '\n';
+        }
+    }
+}
 }
 int main(int argc, char** argv) {
     try {
+        bool benchmark = false, requireCuda = false;
+        for (int i = 1; i < argc; ++i) {
+            const std::string argument = argv[i];
+            if (argument == "--cuda") requireCuda = true;
+            else if (argument == "--benchmark") benchmark = requireCuda = true;
+            else throw std::invalid_argument("Usage: compute_tests [--cuda] [--benchmark]");
+        }
         const bool gpu = qm::cudaAvailable();
-        if (argc > 1 && std::string(argv[1]) == "--cuda" && !gpu) {
+        if (requireCuda && !gpu) {
             std::cout << "SKIP: no usable CUDA device/compiler\n"; return 77;
         }
         qm::RadialSampler radial(1,0,1);
@@ -84,6 +126,8 @@ int main(int argc, char** argv) {
             std::mt19937 rng(99);double cpuY2=0;for(std::size_t i=0;i<points.size();++i){double t=a.sample(rng);cpuY2+=cos(t)*cos(t);}
             require(std::abs(y2/points.size()-cpuY2/points.size())<0.01,"Excited-state angular mismatch");
         }
+        std::cout << "CUDA sampling statistics and CPU/GPU flow parity passed\n";
+        if (benchmark) benchmarkDispatch();
         return 0;
     } catch(const std::exception& e) {std::cerr<<e.what()<<'\n';return 1;}
 }
