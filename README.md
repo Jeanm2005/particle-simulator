@@ -217,7 +217,7 @@ Custom positive Z, including 119, remains available without catalog metadata.
 - [x] Validate representative numerical parity and performance on RTX 5080 Laptop GPU; see [CUDA measurements](docs/cuda-measurements.md).
 - [x] Match ray-march camera projection, bound rays to orbital size, and use consistent density/opacity.
 - [x] Measure representative higher-orbital convergence and software-renderer performance; tune stepping.
-- [ ] Validate full-window renderer performance on hardware GPUs.
+- [x] Measure 1280x720 shader throughput on RTX 5080 Laptop GPU; interactive presentation remains unmeasured.
 
 CUDA implementation lives in `cuda/`. `QM_ENABLE_CUDA` defaults to ON and detects
 an available CUDA compiler; use `-DQM_ENABLE_CUDA=OFF` for an explicit CPU build.
@@ -287,8 +287,9 @@ Next steps, in recommended order:
 
 1. Element-data provenance audit completed for the documented coverage; extend
    sourced configurations above Z = 92 before enabling their Slater screening.
-2. NVIDIA parity/throughput measured on RTX 5080 Laptop GPU; reduce flow transfer
-   overhead before claiming flow acceleration. Complete full-window renderer measurements.
+2. NVIDIA parity/throughput and 1280x720 shader throughput measured on RTX 5080
+   Laptop GPU; reduce flow transfer overhead and measure interactive presentation
+   before claiming faster animation or end-to-end window frame rates.
 3. Implement optional density sonification and WAV export with a documented
    mapping and numerical/audio checks, then extend it to interference.
 4. Add the next independently validated physics model; keep lattice/phonon work

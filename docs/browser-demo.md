@@ -53,8 +53,10 @@ provisional audience/status. The live URL is supplied after successful deploymen
 
 ## Remaining work
 
-NVIDIA runtime parity/performance, hardware-renderer measurements, scientific
-data provenance, broader particle models, sonification/WAV export, and lattice
-physics remain open. See the [roadmap](../README.md#product-scope-and-future-milestones)
+Native RTX 5080 CUDA parity/timings and full-window-sized shader timings are
+recorded in the [CUDA](cuda-measurements.md) and [renderer](renderer-measurements.md)
+reports. [Element-data source coverage](element-data.md) is documented. Interactive
+presentation, broader hardware/configuration coverage, broader particle models,
+sonification/WAV export, and lattice physics remain open. See the [roadmap](../README.md#product-scope-and-future-milestones)
 and [superposition limits](superpositions.md). No browser GPU acceleration or
 literal sound emission is claimed.

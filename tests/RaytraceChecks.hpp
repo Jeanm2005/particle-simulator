@@ -12,8 +12,8 @@
 #include <vector>
 
 // Float attachments avoid hiding integration error behind 8-bit quantization.
-inline void checkOrbitalImages(GLuint program, bool benchmark) {
-    constexpr int width = 49, height = 33;
+inline void checkOrbitalImages(GLuint program, bool benchmark, bool fullWindow = false) {
+    const int width = fullWindow ? 1280 : 49, height = fullWindow ? 720 : 33;
     GLuint texture, framebuffer;
     glGenTextures(1, &texture);
     glBindTexture(GL_TEXTURE_2D, texture);
@@ -61,7 +61,8 @@ inline void checkOrbitalImages(GLuint program, bool benchmark) {
     const State states[] = {{1,0,0}, {2,0,0}, {2,1,0}, {3,2,1}, {4,3,3}, {6,0,0}, {7,0,0}, {7,3,0}, {7,3,3}};
     if (benchmark)
         std::cout << "Renderer: " << glGetString(GL_RENDERER) << "\n"
-                  << "49x33 RGBA32F, 5 synchronized frames, milliseconds/frame; no vsync or readback in timing\n";
+                  << (fullWindow ? "1280x720 RGBA32F, 3 warmups, 20 synchronized frames, median/min/max ms; no presentation or readback in timing\n"
+                                 : "49x33 RGBA32F, 5 synchronized frames, milliseconds/frame; no vsync or readback in timing\n");
     for (const State state : states) {
         for (int view = 0; view < 2; ++view) {
             const float sine = view == 0 ? 0.0f : 0.6f;
@@ -86,6 +87,26 @@ inline void checkOrbitalImages(GLuint program, bool benchmark) {
             scalar("uZ", 1); scalar("uLengthScale", length);
             scalar("uRadius", radial.rMax()); scalar("uDensityScale", 1 / (radialPeak * angularPeak));
             vector("uCamPos", 0, sine * 5 * length, cosine * 5 * length);
+            if (fullWindow) {
+                // Full-resolution throughput is separate from the small numerical-reference checks.
+                image(qm::raytraceSteps); // Verify finite pixels outside the timed region.
+                for (int frame = 0; frame < 3; ++frame) {
+                    glDrawArrays(GL_TRIANGLES, 0, 3); glFinish();
+                }
+                std::vector<double> times;
+                for (int frame = 0; frame < 20; ++frame) {
+                    const auto start = std::chrono::steady_clock::now();
+                    glDrawArrays(GL_TRIANGLES, 0, 3); glFinish();
+                    times.push_back(std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now()-start).count());
+                }
+                if (glGetError() != GL_NO_ERROR) throw std::runtime_error("Full-resolution benchmark GL error");
+                std::sort(times.begin(), times.end());
+                std::cout << "n=" << state.n << " l=" << state.l << " m=" << state.m
+                          << " view=" << view << " steps=" << qm::raytraceSteps
+                          << " median_ms=" << (times[9]+times[10])/2
+                          << " min_ms=" << times.front() << " max_ms=" << times.back() << '\n';
+                continue;
+            }
             auto reference = image(4096);
             for (int steps : {256, 512, 1024}) {
                 auto pixels = image(steps);

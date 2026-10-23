@@ -11,8 +11,9 @@
 
 int main(int argc, char** argv) {
     const bool benchmark = argc == 2 && std::string(argv[1]) == "--benchmark";
-    if (argc > 1 && !benchmark) {
-        std::cerr << "Usage: shader_tests [--benchmark]\n";
+    const bool fullWindow = argc == 2 && std::string(argv[1]) == "--benchmark-full-window";
+    if (argc > 2 || (argc > 1 && !benchmark && !fullWindow)) {
+        std::cerr << "Usage: shader_tests [--benchmark|--benchmark-full-window]\n";
         return 1;
     }
     EGLDisplay display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
@@ -106,6 +107,7 @@ int main(int argc, char** argv) {
                 std::abs(int(miss[0]) - 5) > 1 || std::abs(int(miss[2]) - 13) > 1)
                 throw std::runtime_error("Orbital render bounds/density/inside-camera failed");
             checkOrbitalImages(orbital, benchmark);
+            if (fullWindow) checkOrbitalImages(orbital, true, true);
             glDeleteBuffers(1, &buffer); glDeleteVertexArrays(1, &vao); glDeleteProgram(orbital);
             auto rejects = [](const char* vs, const char* fs, const char* expected) {
                 try {

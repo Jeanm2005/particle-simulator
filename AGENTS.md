@@ -27,7 +27,7 @@ Reference inspiration:
 | Correct Schrödinger sampling and multi-element Z | Required; implemented |
 | OpenGL point cloud, camera, live n/l/m | Required; implemented |
 | Probability-current animation | Required; implemented; preserve radius and Y |
-| GPU ray-march path | Implemented; bounded rays, shared density scale, length-aware opacity, matched FOV; representative higher-orbital convergence/software timings verified; hardware performance pending |
+| GPU ray-march path | Implemented; bounded rays, shared density scale, length-aware opacity, matched FOV; representative convergence/software timings verified; RTX 5080 1280x720 shader timings measured, interactive presentation pending |
 | CUDA acceleration | Implemented; CI compilation/fallback verified; RTX 5080 parity/timings measured (sampling faster, flow slower) |
 | Two-orbital superpositions | Implemented; shared pure-Z Hamiltonian, n <= 4, CPU density snapshots |
 | Provisional browser demo | Shared C++ ApiSession compiled to WebAssembly; each tab owns its state |
@@ -89,8 +89,11 @@ input parsing, relocated installations, and export failures. Offscreen shader
 checks run when EGL is available. Renderer image checks cover representative states through n=7 from two angles
 against a 4096-step reference. `shader_tests --benchmark` additionally reports
 synchronized offscreen timings; keep software-GL and hardware measurements distinct.
-Other graphics runtime checks require a working
-context; report when they cannot be performed.
+`shader_tests --benchmark-full-window` measures a 1280x720 offscreen shader workload
+with warmups and repeated synchronized draws. Verify the printed renderer is
+hardware before labeling results; see `docs/renderer-measurements.md`. It excludes
+presentation/vsync and does not establish interactive FPS. Other graphics runtime
+checks require a working context; report when they cannot be performed.
 
 For WSL graphics problems, try software GL with `LIBGL_ALWAYS_SOFTWARE=1`.
 For a suspected stale binary, configure a fresh build directory and rebuild.
