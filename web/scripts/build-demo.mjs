@@ -14,7 +14,7 @@ function run(command, args) {
 }
 run('npm', ['--prefix', 'web', 'run', 'build']);
 await writeFile(path.join(generated, 'DataPaths.hpp'), '#pragma once\n#define QM_SOURCE_DATA_DIR "/data"\n#define QM_INSTALL_DATA_DIR "/data"\n#define QM_INSTALL_DATA_FROM_BIN "data"\n');
-const sources = ['WasmBindings', 'ApiSession', 'Superposition', 'OrbitalModel', 'Simulation', 'Element', 'QuantumMath', 'Orbital', 'RadialSampler', 'ComputeBackend', 'ComputeDispatch'].map(name => `src/${name}.cpp`);
+const sources = ['WasmBindings', 'ApiSession', 'Superposition', 'Sonification', 'OrbitalModel', 'Simulation', 'Element', 'QuantumMath', 'Orbital', 'RadialSampler', 'ComputeBackend', 'ComputeDispatch'].map(name => `src/${name}.cpp`);
 run(process.env.EMXX || 'em++', [...sources, '-std=c++17', '-O2', '-fexceptions', '--bind', '-Iinclude', `-I${generated}`, '-sMODULARIZE=1', '-sEXPORT_ES6=1', '-sENVIRONMENT=web,worker', '-sALLOW_MEMORY_GROWTH=1', '-sINITIAL_MEMORY=67108864', '-sMAXIMUM_MEMORY=268435456', '--preload-file', 'data/elements.json@/data/elements.json', '-o', path.join(output, 'assets/physics.mjs')]);
 await cp(path.join(root, 'web/dist'), path.join(output, 'assets'), { recursive: true });
 const html = (await readFile(path.join(root, 'web/index.html'), 'utf8')).replace('name="execution-mode" content="native"', 'name="execution-mode" content="wasm"');

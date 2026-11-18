@@ -134,7 +134,7 @@ target_include_directories(qm_compute PUBLIC include)
 target_compile_options(qm_compute PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-O2>)
 set_target_properties(qm_compute PROPERTIES CUDA_STANDARD 17 CUDA_STANDARD_REQUIRED ON)
 target_link_libraries(atom_sim PRIVATE qm_compute)
-add_library(qm_model STATIC src/OrbitalModel.cpp src/Superposition.cpp src/ApiSession.cpp src/Element.cpp src/QuantumMath.cpp
+add_library(qm_model STATIC src/OrbitalModel.cpp src/Superposition.cpp src/Sonification.cpp src/ApiSession.cpp src/Element.cpp src/QuantumMath.cpp
     src/Orbital.cpp src/RadialSampler.cpp src/Simulation.cpp)
 target_include_directories(qm_model PUBLIC include PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
 target_link_libraries(qm_model PUBLIC qm_compute)
@@ -156,6 +156,9 @@ if(BUILD_TESTING)
     target_link_libraries(superposition_tests PRIVATE qm_model)
     add_test(NAME superposition_regressions COMMAND superposition_tests)
     set_tests_properties(superposition_regressions PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+    add_executable(sonification_tests tests/SonificationTests.cpp)
+    target_link_libraries(sonification_tests PRIVATE qm_model)
+    add_test(NAME sonification_regressions COMMAND sonification_tests)
     add_executable(dispatch_tests tests/DispatchTests.cpp src/ComputeDispatch.cpp
         src/QuantumMath.cpp src/RadialSampler.cpp)
     target_include_directories(dispatch_tests PRIVATE include)
