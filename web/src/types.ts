@@ -33,6 +33,23 @@ export interface Result {
   operationExecution: Execution;
   points: [number, number, number][];
 }
+export interface Sonification {
+  mapping: string;
+  mappingVersion: number;
+  label: string;
+  state: { n: number; l: number; m: number };
+  effectiveCharge: number;
+  durationSeconds: number;
+  sampleRate: number;
+  baseFrequencyHz: number;
+  scanRadiusA0: number;
+  frames: number;
+  peakFraction: number;
+  nodeRadiiA0: number[];
+  mimeType: string;
+  wavBase64: string;
+}
+export interface SonificationResponse { runId: string; sonification: Sonification }
 export interface Catalog {
   contractVersion: number;
   model: string;

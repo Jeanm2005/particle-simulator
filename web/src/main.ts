@@ -1,4 +1,4 @@
-import type { Catalog, Request, Result } from "./types.js";
+import type { Catalog, Request, Result, SonificationResponse } from "./types.js";
 import { CloudViewer } from "./viewer.js";
 import { browserApi, browserEngine } from "./browser-api.js";
 import { ApiFailure } from "./protocol.js";
@@ -15,7 +15,12 @@ const step = element<HTMLButtonElement>("step");
 const play = element<HTMLButtonElement>("play");
 const status = element("status"), error = element("error");
 const reconnect = element<HTMLButtonElement>("reconnect");
+const sonifyButton = element<HTMLButtonElement>("sonify");
+const audio = element<HTMLAudioElement>("audio");
+const download = element<HTMLAnchorElement>("download");
+let audioUrl: string | null = null;
 const fieldIds: Record<string, string> = { "element.atomicNumber": "atomic-number", "state.n": "n", "state.l": "l", "state.m": "m", "sampleCount": "samples", "screening": "screening", "seed": "seed", "backend": "backend", "model": "model", "dt": "dt" };
+Object.assign(fieldIds, { "sonification.durationSeconds": "duration", "sonification.baseFrequencyHz": "tone" });
 Object.assign(fieldIds, { "superposition.state": "second-n", "superposition.state.n": "second-n", "superposition.state.l": "second-l", "superposition.state.m": "second-m", "superposition.weight": "weight", "superposition.phase": "phase" });
 let catalog: Catalog | null = null;
 let result: Result | null = null;
@@ -68,6 +73,7 @@ function updateButtons(): void {
   setup.disabled = busy || catalog === null;
   step.disabled = busy || !result || dirty || playing;
   play.disabled = !result || dirty || (busy && !playing);
+  sonifyButton.disabled = busy || !result || dirty || playing || Boolean(result.request.superposition);
   sample.textContent = busy ? "Computing…" : "Sample orbital ↗";
   play.textContent = playing ? "Pause" : "Play";
   play.setAttribute("aria-pressed", String(playing));
@@ -112,6 +118,7 @@ async function sampleState(): Promise<void> {
   try {
     const next = await api<Result>("/api/sample", request());
     dirty = false; display(next, true);
+    clearAudio(next.request.superposition ? "Sonification of superpositions is not available yet; choose a single orbital." : "Ready to generate audio for this orbital.");
     status.textContent = `Ready. ${next.request.superposition ? "Coherent two-state density" : next.request.screening === "pure-z" ? "Pure Z" : "Approximate Slater screening"}; statistics use all samples.`;
   } catch (reason) { status.textContent = "Sampling failed. Previous results remain visible."; showError(reason); }
   finally { busy = false; updateButtons(); }
@@ -128,6 +135,31 @@ async function advance(): Promise<void> {
     busy = false; updateButtons();
     if (playing && !dirty) timer = window.setTimeout(() => void advance(), 100);
   }
+}
+function clearAudio(message: string): void {
+  if (audioUrl) URL.revokeObjectURL(audioUrl);
+  audioUrl = null; audio.pause(); audio.removeAttribute("src"); audio.hidden = true;
+  download.hidden = true; download.removeAttribute("href");
+  element("sonify-result").textContent = message;
+}
+async function sonify(): Promise<void> {
+  if (busy || !result || dirty || result.request.superposition) return;
+  const duration = element<HTMLInputElement>("duration"), tone = element<HTMLInputElement>("tone");
+  if (!duration.reportValidity() || !tone.reportValidity()) return;
+  pause(); clearError(); busy = true; updateButtons();
+  element("sonify-result").textContent = "Generating audio in C++…";
+  try {
+    const { sonification: s } = await api<SonificationResponse>("/api/sonify", { runId: result.runId, durationSeconds: duration.valueAsNumber, sampleRate: 44100, baseFrequencyHz: tone.valueAsNumber });
+    const bytes = Uint8Array.from(atob(s.wavBase64), c => c.charCodeAt(0));
+    clearAudio("");
+    audioUrl = URL.createObjectURL(new Blob([bytes], { type: s.mimeType }));
+    audio.src = audioUrl; audio.hidden = false;
+    download.href = audioUrl; download.hidden = false;
+    download.download = `${result.element.symbol}_${s.state.n}${"spdf"[s.state.l]}_density_scan.wav`;
+    const nodes = s.nodeRadiiA0.length === 0 ? "No radial nodes" : `${s.nodeRadiiA0.length} ${s.nodeRadiiA0.length === 1 ? "silence" : "silences"} at ${s.nodeRadiiA0.map(r => r.toFixed(3)).join(", ")} a₀`;
+    element("sonify-result").textContent = `${nodes}. Scan 0 → ${s.scanRadiusA0.toLocaleString(undefined, { maximumFractionDigits: 3 })} a₀ over ${s.durationSeconds} s at ${s.sampleRate / 1000} kHz, ${s.baseFrequencyHz} Hz tone. ${s.label}`;
+  } catch (reason) { element("sonify-result").textContent = "Audio generation failed."; showError(reason); }
+  finally { busy = false; updateButtons(); }
 }
 function syncRanges(): void {
   const coherent = selected("model") === "orbital-superposition";
@@ -165,6 +197,7 @@ form.addEventListener("input", event => {
   syncRanges(); status.textContent = result ? "Inputs changed. Sample orbital to apply; previous results remain visible." : "Ready to sample."; updateButtons();
 });
 step.addEventListener("click", () => void advance());
+sonifyButton.addEventListener("click", () => void sonify());
 play.addEventListener("click", () => { if (playing) pause(); else { playing = true; updateButtons(); void advance(); } });
 element("reset-camera").addEventListener("click", () => viewer?.reset());
 document.addEventListener("visibilitychange", () => { if (document.hidden) pause(); });

@@ -16,6 +16,13 @@ scope.onmessage = async event => {
       if (!runId || advance.runId !== runId) throw new ApiFailure("This run is no longer active; sample again", "runId", "invalid-input");
       if (!Number.isFinite(advance.dt)) throw new ApiFailure("Expected finite atomic-unit time", "dt", "invalid-input");
       command = `advance ${advance.dt}`;
+    } else if (path === "/api/sonify") {
+      const audio = body as { runId: string; durationSeconds: number; sampleRate: number; baseFrequencyHz: number };
+      if (!runId || audio.runId !== runId) throw new ApiFailure("This run is no longer active; sample again", "runId", "invalid-input");
+      if (!Number.isFinite(audio.durationSeconds)) throw new ApiFailure("Expected a finite number", "sonification.durationSeconds", "invalid-input");
+      if (!Number.isSafeInteger(audio.sampleRate)) throw new ApiFailure("Expected a whole number", "sonification.sampleRate", "invalid-input");
+      if (!Number.isFinite(audio.baseFrequencyHz)) throw new ApiFailure("Expected a finite number", "sonification.baseFrequencyHz", "invalid-input");
+      command = `sonify ${audio.durationSeconds} ${audio.sampleRate} ${audio.baseFrequencyHz}`;
     } else throw new ApiFailure("Unknown operation", "", "invalid-input");
     const payload = JSON.parse(session.execute(command)) as Record<string, unknown>;
     if (!payload.error) {

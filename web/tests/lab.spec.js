@@ -144,3 +144,32 @@ test('coherent density changes with time and pure-Z constraints are explicit', a
   await expect.poll(async () => Number(await page.locator('#centroid').textContent())).toBeLessThan(-0.5);
   await expect(page.locator('#interpretation')).toContainText('not tracked trajectories');
 });
+
+test('density sonification produces a playable, downloadable WAV with node silences', async ({ page }) => {
+  await ready(page);
+  await page.locator('#samples').fill('1000');
+  await page.locator('#n').fill('3');
+  await sample(page);
+  await expect(page.locator('#sonify')).toBeEnabled();
+  await page.locator('#duration').fill('1');
+  await page.locator('#sonify').click();
+  await expect(page.locator('#sonify-result')).toContainText('2 silences at 1.90');
+  await expect(page.locator('#sonify-result')).toContainText('orbitals do not emit audible sound');
+  await expect(page.locator('#audio')).toBeVisible();
+  await expect(page.locator('#download')).toHaveAttribute('download', 'H_3s_density_scan.wav');
+  const decoded = await page.evaluate(() => new Promise(resolve => {
+    const audio = document.getElementById('audio');
+    const done = () => resolve({ blob: audio.src.startsWith('blob:'), duration: audio.duration, error: audio.error?.code ?? 0 });
+    if (audio.readyState >= 1) done(); else { audio.addEventListener('loadedmetadata', done, { once: true }); audio.addEventListener('error', done, { once: true }); }
+  }));
+  expect(decoded.blob).toBe(true);
+  expect(decoded.error).toBe(0);
+  expect(decoded.duration).toBeCloseTo(1, 3);
+  await page.locator('#seed').fill('7');
+  await expect(page.locator('#sonify')).toBeDisabled();
+  await page.locator('#try-interference').click();
+  await expect(page.locator('#status')).toContainText('Coherent two-state density');
+  await expect(page.locator('#sonify')).toBeDisabled();
+  await expect(page.locator('#audio')).toBeHidden();
+  await expect(page.locator('#sonify-result')).toContainText('not available yet');
+});
