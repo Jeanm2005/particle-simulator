@@ -1,4 +1,4 @@
-# Quantum Orbital Simulator
+# Quantum Orbital & Lattice Simulator
 
 [![CI](https://github.com/Jeanm2005/particle-simulator/actions/workflows/ci.yml/badge.svg)](https://github.com/Jeanm2005/particle-simulator/actions/workflows/ci.yml)
 ![C++17](https://img.shields.io/badge/C%2B%2B-17-00599C)
@@ -6,10 +6,15 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-UI-3178C6)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-Interactive 3D simulator of electron orbitals built on exact solutions of the
-Schrödinger equation. One C++17 physics core drives a native OpenGL viewer, a
-local TypeScript web app, and an in-browser WebAssembly build, with optional
-CUDA acceleration.
+Interactive simulator of electron orbitals and lattice vibrations built on exact
+solutions: the hydrogenic Schrödinger equation and the normal modes of a
+harmonic crystal. One C++17 physics core drives a native OpenGL viewer, a local
+TypeScript web app, and an in-browser WebAssembly build, with optional CUDA
+acceleration.
+
+| Hydrogen 3d orbital (200k samples) | Diatomic-chain phonon and dispersion |
+|---|---|
+| ![Hydrogen 3d probability cloud](media/orbital.png) | ![Acoustic phonon mode with dispersion relation](media/lattice-phonons.png) |
 
 ## Highlights
 
@@ -18,6 +23,9 @@ CUDA acceleration.
   Z<sub>eff</sub>, using element data for Z = 1–118 audited against CIAAW and NIST.
 - **Time-dependent dynamics.** Probability-current flow, plus normalized
   two-orbital superpositions whose density beats at the Bohr frequency.
+- **Lattice phonons.** Acoustic and optical normal modes of a 1D diatomic
+  crystal. The UI shows a live dispersion plot, the band gap and the group
+  velocity, and the atoms evolve exactly in time.
 - **GPU rendering and compute.** Point-cloud and volumetric ray-marching shaders.
   CUDA kernels handle sampling and flow on persistent device buffers, and fall
   back to the CPU at build time and at runtime.
@@ -27,7 +35,7 @@ CUDA acceleration.
 - **Three front ends, one core.** The OpenGL desktop viewer, the local web UI
   (HTTP to a native worker) and the static WebAssembly demo all share the same
   validated `ApiSession` protocol.
-- **Tested.** 12 CTest suites, offscreen shader image regressions, HTTP transport
+- **Tested.** 13 CTest suites, offscreen shader image regressions, HTTP transport
   tests and Playwright browser tests run in GitHub Actions. Tagged builds publish
   checksummed Linux packages.
 
@@ -84,7 +92,7 @@ flowchart LR
   subgraph Core["C++17 physics core"]
     QM[QuantumMath<br/>Laguerre / Legendre / Slater]
     S[RadialSampler<br/>inverse-CDF]
-    M[OrbitalModel · SuperpositionModel · Sonification]
+    M[OrbitalModel · SuperpositionModel · Sonification · PhononModel]
     D[ComputeDispatch]
     QM --> S --> M --> D
   end
@@ -101,6 +109,7 @@ flowchart LR
 | `src/QuantumMath.cpp`, `src/RadialSampler.cpp` | Wavefunctions, screening, CDF sampling |
 | `src/OrbitalModel.cpp`, `src/Superposition.cpp` | Validated request/result models |
 | `src/Sonification.cpp` | Density scan, transition dipoles, interference audio, WAV |
+| `src/PhononModel.cpp` | Diatomic-chain dispersion, polarization, exact mode evolution |
 | `src/ComputeDispatch.cpp`, `cuda/` | CPU/CUDA dispatch with runtime fallback |
 | `src/Engine.cpp`, `include/RaytraceShaders.hpp` | OpenGL point and ray-march rendering |
 | `src/ApiSession.cpp`, `tools/serve.py` | Line protocol, loopback HTTP server |
@@ -127,13 +136,22 @@ flowchart LR
   Output is 16-bit mono WAV. These are mappings of the data; orbitals do not
   emit audible sound.
 
+- **Lattice phonons.** A diatomic chain with nearest-neighbour springs and
+  periodic boundaries, in reduced units K = m₁ = a = 1. Its dispersion is
+  ω²<sub>±</sub> = s ± √(s² − 4 sin²(k/2)/m₂), with s = 1 + 1/m₂. The
+  dispersion matches the eigenvalues of the full 2N×2N dynamical matrix to
+  1e-9. A velocity-Verlet integration of the entire chain reproduces the
+  analytic modes, with energy conserved to 1e-6. The monatomic, band-gap and
+  sound-speed limits are checked against their closed forms.
+
 Not modeled: relativistic effects, spin, external fields, electron-electron
-correlation. For quantitative chemistry, use a Hartree–Fock or DFT package.
+correlation, and anharmonic lattice effects. For quantitative chemistry, use a
+Hartree–Fock or DFT package.
 
 ## Testing and CI
 
 `ctest` runs the physics, screening, sampling, model, superposition,
-sonification, dispatch, CUDA-parity, console, installation and HTTP-transport
+sonification, lattice-phonon, dispatch, CUDA-parity, console, installation and HTTP-transport
 suites, plus EGL shader image checks when available. `npm test` in `web/` runs
 the browser suite. GitHub Actions builds console, OpenGL, CUDA (CPU-fallback)
 and WebAssembly targets. Pushing a `v*` tag publishes tested Linux packages to
@@ -150,7 +168,8 @@ Releases.
 - [x] Interference sonification and validation of additional state pairs
 - [x] Device-resident CUDA buffers with transactional on-device validation
 - [ ] CUDA/OpenGL interop, so the viewer draws GPU-resident clouds without host copies
-- [ ] Additional validated physics models, such as lattice phonons
+- [x] Validated 1D diatomic lattice phonon model with dispersion visualization
+- [ ] 2D/3D lattices, phonon density of states, and anharmonic coupling
 
 ## Acknowledgments
 
