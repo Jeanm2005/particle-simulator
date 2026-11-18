@@ -1,4 +1,5 @@
 #include "ApiSession.hpp"
+#include "Sonification.hpp"
 #include <algorithm>
 #include <charconv>
 #include <cmath>
@@ -45,6 +46,32 @@ double real(std::istream& input, const char* field) {
 void end(std::istream& input) {
     std::string extra;
     if (input >> extra) throw qm::ModelError("invalid-input", "", "Unexpected command fields");
+}
+std::string base64(const std::vector<std::uint8_t>& bytes) {
+    static const char* alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::string out;
+    out.reserve((bytes.size() + 2) / 3 * 4);
+    for (std::size_t i = 0; i < bytes.size(); i += 3) {
+        const std::uint32_t chunk = bytes[i] << 16 | (i + 1 < bytes.size() ? bytes[i + 1] << 8 : 0)
+                                  | (i + 2 < bytes.size() ? bytes[i + 2] : 0);
+        out += alphabet[chunk >> 18 & 63];
+        out += alphabet[chunk >> 12 & 63];
+        out += i + 1 < bytes.size() ? alphabet[chunk >> 6 & 63] : '=';
+        out += i + 2 < bytes.size() ? alphabet[chunk & 63] : '=';
+    }
+    return out;
+}
+void sonification(std::ostream& out, const qm::SonificationResult& s) {
+    out << "{\"contractVersion\":1,\"sonification\":{\"mapping\":"; string(out, qm::sonificationMapping);
+    out << ",\"mappingVersion\":" << qm::sonificationMappingVersion
+        << ",\"label\":\"Sonification: tone amplitude follows normalized radial probability density r^2|R|^2 while scanning r from 0 to the scan radius. Silences mark radial nodes. Pitch is a fixed display choice; orbitals do not emit audible sound.\""
+        << ",\"state\":{\"n\":" << s.state.n << ",\"l\":" << s.state.l << ",\"m\":" << s.state.m << '}'
+        << ",\"effectiveCharge\":" << s.effectiveCharge << ",\"durationSeconds\":" << s.request.durationSeconds
+        << ",\"sampleRate\":" << s.request.sampleRate << ",\"baseFrequencyHz\":" << s.request.baseFrequencyHz
+        << ",\"scanRadiusA0\":" << s.scanRadiusA0 << ",\"frames\":" << s.pcm.size()
+        << ",\"peakFraction\":" << qm::sonificationPeak << ",\"nodeRadiiA0\":[";
+    for (std::size_t i = 0; i < s.nodeRadiiA0.size(); ++i) out << (i ? "," : "") << s.nodeRadiiA0[i];
+    out << "],\"mimeType\":\"audio/wav\",\"wavBase64\":\"" << base64(qm::encodeWav(s.pcm, s.request.sampleRate)) << "\"}}";
 }
 void element(std::ostream& out, const qm::Element& e) {
     out << "{\"atomicNumber\":" << e.Z << ",\"symbol\":"; string(out, e.symbol);
@@ -116,6 +143,7 @@ std::string ApiSession::execute(const std::string& line) {
                           << ",\"model\":\"hydrogenic-orbital\",\"maxN\":" << caps.maxN << ",\"maxL\":" << caps.maxL
                           << ",\"maxSamples\":" << sampleLimit_ << ",\"maxPreviewPoints\":" << previewLimit
                           << ",\"maxSuperpositionN\":4,\"maxSuperpositionSamples\":20000,\"models\":[\"hydrogenic-orbital\",\"orbital-superposition\"]"
+                          << ",\"sonification\":{\"mapping\":\"radial-density-scan\",\"mappingVersion\":1,\"minDurationSeconds\":0.5,\"maxDurationSeconds\":10,\"sampleRates\":[22050,44100,48000],\"minBaseFrequencyHz\":55,\"maxBaseFrequencyHz\":1760,\"models\":[\"hydrogenic-orbital\"]}"
                           << ",\"units\":{\"coordinates\":\"a0\",\"energy\":\"eV\",\"time\":\"atomic-unit\",\"polarAxis\":\"Y\"},\"elements\":[";
                 bool first = true;
                 for (const auto& e : database_.all()) { if (!first) out << ','; first = false; element(out, e); }
@@ -174,6 +202,17 @@ std::string ApiSession::execute(const std::string& line) {
                 }
                 const auto info = model_.advance(*current_, dt); time_ += dt;
                 result(out, *current_, time_, info);
+            } else if (operation == "sonify") {
+                qm::SonificationRequest request;
+                request.durationSeconds = real(input, "sonification.durationSeconds");
+                request.sampleRate = integer<int>(input, "sonification.sampleRate");
+                request.baseFrequencyHz = real(input, "sonification.baseFrequencyHz");
+                end(input);
+                qm::validateSonification(request);
+                if (coherent_)
+                    throw qm::ModelError("unsupported-model", "model", "Sonification of superpositions is not available yet");
+                if (!current_) throw qm::ModelError("invalid-input", "runId", "Sample an orbital first");
+                sonification(out, qm::sonifyRadialDensity(current_->request.state, current_->observables.Zeff, request));
             } else throw qm::ModelError("invalid-input", "operation", "Unknown operation");
         } catch (const qm::ModelError& error) {
             out << "{\"error\":{\"code\":"; string(out, error.code);

@@ -1,7 +1,9 @@
+import base64
 import http.client
 import importlib.util
 import json
 import math
+import struct
 from pathlib import Path
 import sys
 import threading
@@ -139,6 +141,45 @@ class TransportTests(unittest.TestCase):
         self.assertEqual(self.call("/api/sample", invalid)[1]["error"]["field"], "superposition.state")
         self.assertEqual(self.call("/api/advance", {"runId": first["runId"], "dt": 0})[0], 200)
 
+    def test_sonification(self):
+        status, catalog = self.call("/api/catalog")
+        self.assertEqual(catalog["sonification"]["mapping"], "radial-density-scan")
+        _, sampled = self.call("/api/sample", request(state={"n": 3, "l": 0, "m": 0}, sampleCount=10))
+        body = {"runId": sampled["runId"], "durationSeconds": 1, "sampleRate": 22050, "baseFrequencyHz": 220}
+        status, first = self.call("/api/sonify", body)
+        self.assertEqual(status, 200)
+        audio = first["sonification"]
+        self.assertEqual(first["runId"], sampled["runId"])
+        self.assertEqual(audio["frames"], 22050)
+        self.assertIn("orbitals do not emit audible sound", audio["label"])
+        self.assertEqual(len(audio["nodeRadiiA0"]), 2)
+        self.assertAlmostEqual(audio["nodeRadiiA0"][0], (9 - 3 * math.sqrt(3)) / 2, delta=0.02)
+        wav = base64.b64decode(audio["wavBase64"])
+        self.assertEqual(wav[:4], b"RIFF")
+        self.assertEqual(wav[8:16], b"WAVEfmt ")
+        self.assertEqual(struct.unpack_from("<HHIIHH", wav, 20), (1, 1, 22050, 44100, 2, 16))
+        self.assertEqual(struct.unpack_from("<I", wav, 40)[0], 44100)
+        self.assertEqual(self.call("/api/sonify", body)[1]["sonification"]["wavBase64"], audio["wavBase64"])
+        status, unchanged = self.call("/api/advance", {"runId": sampled["runId"], "dt": 0})
+        self.assertEqual(status, 200)
+        for key, value, field in (("durationSeconds", 0.1, "sonification.durationSeconds"),
+                                  ("sampleRate", 8000, "sonification.sampleRate"),
+                                  ("sampleRate", 44100.5, "sonification.sampleRate"),
+                                  ("baseFrequencyHz", "220", "sonification.baseFrequencyHz"),
+                                  ("baseFrequencyHz", 4000, "sonification.baseFrequencyHz")):
+            with self.subTest(key=key, value=value):
+                status, error = self.call("/api/sonify", dict(body, **{key: value}))
+                self.assertGreaterEqual(status, 400)
+                self.assertEqual(error["error"]["field"], field)
+        self.assertEqual(self.call("/api/sonify", dict(body, runId="stale"))[0], 409)
+        self.assertEqual(self.call("/api/sonify", dict(body, extra=1))[0], 400)
+        coherent = request(model="orbital-superposition", sampleCount=100,
+                           superposition={"state": {"n": 2, "l": 1, "m": 0}, "weight": 0.5, "phase": 0})
+        _, mixed = self.call("/api/sample", coherent)
+        status, error = self.call("/api/sonify", dict(body, runId=mixed["runId"]))
+        self.assertEqual(status, 422)
+        self.assertEqual(error["error"]["code"], "unsupported-model")
+
     def test_worker_failure_and_busy(self):
         self.worker.lock.acquire()
         try:
@@ -179,6 +220,7 @@ class TransportTests(unittest.TestCase):
         self.assertEqual(response.status, 200)
         self.assertIn(b"Orbital lab", response.read())
         self.assertIn("frame-ancestors 'none'", response.getheader("Content-Security-Policy"))
+        self.assertIn("media-src 'self' blob:", response.getheader("Content-Security-Policy"))
         connection.close()
 
 

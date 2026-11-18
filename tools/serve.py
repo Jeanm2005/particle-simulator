@@ -147,6 +147,20 @@ class Worker:
             if route == "/api/sample":
                 result = self.exchange(sample_command(value))
                 self.run_id = uuid.uuid4().hex
+            elif route == "/api/sonify":
+                fields(value, ("runId", "durationSeconds", "sampleRate", "baseFrequencyHz"))
+                if not isinstance(value["runId"], str) or self.run_id is None or value["runId"] != self.run_id:
+                    raise ApiError("This run is no longer active; sample again", "runId", status=409)
+                command = ["sonify"]
+                for key in ("durationSeconds", "sampleRate", "baseFrequencyHz"):
+                    number = value[key]
+                    if type(number) not in (int, float) or not math.isfinite(number) or abs(number) > 1e6:
+                        raise ApiError("Expected a finite number", "sonification." + key)
+                    if key == "sampleRate":
+                        command.append(whole(number, 1, 10**6, "sonification.sampleRate"))
+                    else:
+                        command.append(repr(float(number)))
+                result = self.exchange(" ".join(command))
             elif route == "/api/advance":
                 fields(value, ("runId", "dt"))
                 if not isinstance(value["runId"], str) or self.run_id is None or value["runId"] != self.run_id:
@@ -193,7 +207,7 @@ def create_server(worker, web_root, port=8000):
             self.send_header("Content-Length", str(len(content)))
             self.send_header("Cache-Control", "no-store")
             self.send_header("X-Content-Type-Options", "nosniff")
-            self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'")
+            self.send_header("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; media-src 'self' blob:; frame-ancestors 'none'")
             self.end_headers()
             self.wfile.write(content)
 
@@ -224,7 +238,7 @@ def create_server(worker, web_root, port=8000):
             try:
                 self.valid_origin()
                 path = urlsplit(self.path).path
-                if path not in ("/api/sample", "/api/advance"):
+                if path not in ("/api/sample", "/api/advance", "/api/sonify"):
                     raise ApiError("Unknown POST route", status=404)
                 if self.headers.get("Content-Type", "").split(";", 1)[0].strip() != "application/json":
                     raise ApiError("Use application/json", status=415)
