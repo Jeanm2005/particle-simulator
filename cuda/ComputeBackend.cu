@@ -3,22 +3,41 @@
 #include <cuda_runtime.h>
 #include <cmath>
 #include <limits>
+#include <mutex>
 #include <stdexcept>
 namespace qm {
 namespace {
+static_assert(sizeof(std::array<double, 3>) == 3 * sizeof(double), "Cloud points must be contiguous triples");
 void check(cudaError_t status) {
     if (status != cudaSuccess) throw std::runtime_error(cudaGetErrorString(status));
 }
+// Grow-only device allocation reused across calls; avoids cudaMalloc/cudaFree per frame.
 template<class T> struct Buffer {
     T* data = nullptr;
-    explicit Buffer(std::size_t n) { check(cudaMalloc(reinterpret_cast<void**>(&data), n * sizeof(T))); }
-    ~Buffer() { if (data) cudaFree(data); }
+    std::size_t capacity = 0;
+    Buffer() = default;
     Buffer(const Buffer&) = delete;
     Buffer& operator=(const Buffer&) = delete;
+    ~Buffer() { if (data) cudaFree(data); }
+    void reserve(std::size_t n) {
+        if (n <= capacity) return;
+        if (data) { cudaFree(data); data = nullptr; capacity = 0; }
+        check(cudaMalloc(reinterpret_cast<void**>(&data), n * sizeof(T)));
+        capacity = n;
+    }
 };
+// Persistent device state. One mutex serializes use of the shared buffers.
+struct DeviceState {
+    std::mutex lock;
+    Buffer<double> radialGrid, radialCdf, angularGrid, angularCdf;
+    Buffer<double> input, output;
+    Buffer<int> flag;
+};
+DeviceState& state() { static DeviceState device; return device; }
+
 // SplitMix64 counter-based random stream: independent of launch scheduling.
-__device__ double uniform(unsigned long long& state) {
-    unsigned long long z = (state += 0x9e3779b97f4a7c15ULL);
+__device__ double uniform(unsigned long long& s) {
+    unsigned long long z = (s += 0x9e3779b97f4a7c15ULL);
     z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9ULL;
     z = (z ^ (z >> 27)) * 0x94d049bb133111ebULL;
     z ^= z >> 31;
@@ -34,31 +53,39 @@ __device__ double inverse(const double* grid, const double* cdf, std::size_t n, 
 }
 __global__ void sampleKernel(double* out, std::size_t count, const double* rg,
         const double* rc, std::size_t rn, const double* ag, const double* ac,
-        std::size_t an, unsigned long long seed, double pi) {
+        std::size_t an, unsigned long long seed, double pi, int* nonfinite) {
     const std::size_t i = static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
     if (i >= count) return;
-    unsigned long long state = seed + 3ULL * i * 0x9e3779b97f4a7c15ULL;
-    const double r = inverse(rg, rc, rn, uniform(state));
-    const double theta = inverse(ag, ac, an, uniform(state));
-    const double phi = 2 * pi * uniform(state);
-    out[3*i] = r * sin(theta) * cos(phi);
-    out[3*i+1] = r * cos(theta);
-    out[3*i+2] = r * sin(theta) * sin(phi);
+    unsigned long long s = seed + 3ULL * i * 0x9e3779b97f4a7c15ULL;
+    const double r = inverse(rg, rc, rn, uniform(s));
+    const double theta = inverse(ag, ac, an, uniform(s));
+    const double phi = 2 * pi * uniform(s);
+    const double x = r * sin(theta) * cos(phi), y = r * cos(theta), z = r * sin(theta) * sin(phi);
+    if (!isfinite(x) || !isfinite(y) || !isfinite(z)) atomicExch(nonfinite, 1);
+    out[3*i] = x; out[3*i+1] = y; out[3*i+2] = z;
 }
-__global__ void flowKernel(double* points, std::size_t count, int m, double dt) {
+// flag bit 1: invalid input (matches host preflight); bit 2: nonfinite output.
+__global__ void flowKernel(const double* in, double* out, std::size_t count, int m, double dt, int* flag) {
     const std::size_t i = static_cast<std::size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
     if (i >= count) return;
-    const double x = points[3*i], z = points[3*i+2];
+    const double x = in[3*i], y = in[3*i+1], z = in[3*i+2];
     const double rho2 = x*x + z*z;
-    if (m == 0 || rho2 < 1e-16 || dt == 0) return;
-    const double angle = static_cast<double>(m) * dt / rho2;
-    points[3*i] = x*cos(angle) - z*sin(angle);
-    points[3*i+2] = x*sin(angle) + z*cos(angle);
+    double nx = x, nz = z;
+    if (!isfinite(x) || !isfinite(y) || !isfinite(z) || !isfinite(rho2)) { atomicOr(flag, 1); }
+    else if (m != 0 && rho2 >= 1e-16 && dt != 0) {
+        const double angle = static_cast<double>(m) * dt / rho2;
+        if (!isfinite(angle)) atomicOr(flag, 1);
+        else { nx = x*cos(angle) - z*sin(angle); nz = x*sin(angle) + z*cos(angle); }
+    }
+    if (!isfinite(nx) || !isfinite(nz)) atomicOr(flag, 2);
+    out[3*i] = nx; out[3*i+1] = y; out[3*i+2] = nz;
 }
 void upload(Buffer<double>& buffer, const std::vector<double>& values) {
+    buffer.reserve(values.size());
     check(cudaMemcpy(buffer.data, values.data(), values.size()*sizeof(double), cudaMemcpyHostToDevice));
 }
-bool validCount(std::size_t n) { return n <= static_cast<std::size_t>(std::numeric_limits<int>::max()); }
+bool validCount(std::size_t n) { return n <= static_cast<std::size_t>(std::numeric_limits<int>::max()) / 3; }
+unsigned blocks(std::size_t n) { return static_cast<unsigned>((n + 255) / 256); }
 }
 bool cudaAvailable() {
     int count = 0;
@@ -70,46 +97,48 @@ bool cudaSample(const RadialSampler& radial, const AngularSampler& angular,
     if (!validCount(count)) throw std::invalid_argument("CUDA sample count too large");
     if (!cudaAvailable()) return false;
     if (count == 0) { output.clear(); return true; }
+    auto& device = state();
+    std::lock_guard<std::mutex> guard(device.lock);
     try {
-        Buffer<double> rg(radial.grid().size()), rc(radial.cdf().size());
-        Buffer<double> ag(angular.grid().size()), ac(angular.cdf().size()), points(3*count);
-        upload(rg, radial.grid()); upload(rc, radial.cdf());
-        upload(ag, angular.grid()); upload(ac, angular.cdf());
-        sampleKernel<<<static_cast<unsigned>((count+255)/256),256>>>(points.data, count,
-            rg.data, rc.data, radial.grid().size(), ag.data, ac.data, angular.grid().size(), seed, PI);
+        upload(device.radialGrid, radial.grid()); upload(device.radialCdf, radial.cdf());
+        upload(device.angularGrid, angular.grid()); upload(device.angularCdf, angular.cdf());
+        device.output.reserve(3 * count); device.flag.reserve(1);
+        check(cudaMemset(device.flag.data, 0, sizeof(int)));
+        sampleKernel<<<blocks(count), 256>>>(device.output.data, count, device.radialGrid.data, device.radialCdf.data,
+            radial.grid().size(), device.angularGrid.data, device.angularCdf.data, angular.grid().size(), seed, PI,
+            device.flag.data);
         check(cudaGetLastError());
-        std::vector<double> flat(3*count);
-        check(cudaMemcpy(flat.data(), points.data, flat.size()*sizeof(double), cudaMemcpyDeviceToHost));
+        int nonfinite = 0;
+        check(cudaMemcpy(&nonfinite, device.flag.data, sizeof(int), cudaMemcpyDeviceToHost));
+        if (nonfinite) return false;
         Cloud result(count);
-        for (std::size_t i=0; i<count; ++i) {
-            result[i] = {flat[3*i],flat[3*i+1],flat[3*i+2]};
-            for (double value : result[i]) if (!std::isfinite(value)) return false;
-        }
+        check(cudaMemcpy(result.data(), device.output.data, 3 * count * sizeof(double), cudaMemcpyDeviceToHost));
         output.swap(result);
         return true;
     } catch (const std::runtime_error&) { return false; }
 }
+// Transactional: on false or an exception the host cloud is unchanged.
 bool cudaAdvance(Cloud& points, int m, double dt) {
     if (!std::isfinite(dt) || !validCount(points.size())) throw std::invalid_argument("Invalid CUDA flow input");
-    std::vector<double> flat;
-    flat.reserve(3*points.size());
-    for (const auto& p : points) {
-        for (double v : p) if (!std::isfinite(v)) throw std::invalid_argument("Nonfinite CUDA point");
-        const double rho2 = p[0]*p[0]+p[2]*p[2];
-        if (!std::isfinite(rho2) || (m != 0 && rho2 >= 1e-16 && !std::isfinite(m*dt/rho2)))
-            throw std::invalid_argument("Invalid CUDA flow angle");
-        flat.insert(flat.end(), p.begin(), p.end());
-    }
     if (!cudaAvailable()) return false;
     if (points.empty()) return true;
+    const std::size_t values = 3 * points.size(), bytes = values * sizeof(double);
+    auto& device = state();
+    std::lock_guard<std::mutex> guard(device.lock);
+    int flag = 0;
     try {
-        Buffer<double> device(flat.size()); upload(device,flat);
-        flowKernel<<<static_cast<unsigned>((points.size()+255)/256),256>>>(device.data,points.size(),m,dt);
+        device.input.reserve(values); device.output.reserve(values); device.flag.reserve(1);
+        check(cudaMemcpy(device.input.data, points.data(), bytes, cudaMemcpyHostToDevice));
+        check(cudaMemset(device.flag.data, 0, sizeof(int)));
+        flowKernel<<<blocks(points.size()), 256>>>(device.input.data, device.output.data, points.size(), m, dt, device.flag.data);
         check(cudaGetLastError());
-        check(cudaMemcpy(flat.data(),device.data,flat.size()*sizeof(double),cudaMemcpyDeviceToHost));
-        for (double value : flat) if (!std::isfinite(value)) return false;
-        for (std::size_t i=0;i<points.size();++i) points[i]={flat[3*i],flat[3*i+1],flat[3*i+2]};
-        return true;
+        check(cudaMemcpy(&flag, device.flag.data, sizeof(int), cudaMemcpyDeviceToHost));
     } catch (const std::runtime_error&) { return false; }
+    if (flag & 1) throw std::invalid_argument("Invalid CUDA flow input or angle");
+    if (flag & 2) return false;
+    if (cudaMemcpy(points.data(), device.output.data, bytes, cudaMemcpyDeviceToHost) == cudaSuccess) return true;
+    // A failed copy may have written part of the cloud; restore the untouched input.
+    if (cudaMemcpy(points.data(), device.input.data, bytes, cudaMemcpyDeviceToHost) == cudaSuccess) return false;
+    throw std::runtime_error("CUDA flow download failed and the cloud could not be restored");
 }
 }

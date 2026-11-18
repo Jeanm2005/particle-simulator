@@ -126,6 +126,22 @@ int main(int argc, char** argv) {
             std::mt19937 rng(99);double cpuY2=0;for(std::size_t i=0;i<points.size();++i){double t=a.sample(rng);cpuY2+=cos(t)*cos(t);}
             require(std::abs(y2/points.size()-cpuY2/points.size())<0.01,"Excited-state angular mismatch");
         }
+        // Persistent buffers: shrink after the 1M run, then regrow, and stay exact.
+        for (const auto count : {10u, 1000000u, 3u}) {
+            qm::Cloud small; std::mt19937 rng(7);
+            qm::sampleCloud(radial, angular, count, rng, small, qm::BackendPreference::Cpu);
+            auto expected = small;
+            for (auto& p : expected) qm::advanceProbabilityCurrent(p[0], p[2], 2, 0.05);
+            const auto execution = qm::advanceCloud(small, 2, 0.05);
+            require(execution.backend == "cuda", "Dispatch did not use CUDA flow");
+            for (std::size_t i = 0; i < count; ++i)
+                require(small[i][1] == expected[i][1] && std::abs(small[i][0]-expected[i][0]) < 1e-9 &&
+                        std::abs(small[i][2]-expected[i][2]) < 1e-9, "Reused-buffer flow mismatch");
+        }
+        qm::Cloud invalid{{1, 2, 3}, {std::nan(""), 0, 1}}, before = invalid;
+        try { qm::cudaAdvance(invalid, 1, 0.1); throw std::runtime_error("Expected invalid CUDA flow rejection"); }
+        catch (const std::invalid_argument&) {}
+        require(invalid[0] == before[0] && std::isnan(invalid[1][0]), "Rejected CUDA flow changed the cloud");
         std::cout << "CUDA sampling statistics and CPU/GPU flow parity passed\n";
         if (benchmark) benchmarkDispatch();
         return 0;

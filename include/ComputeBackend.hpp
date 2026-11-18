@@ -19,6 +19,8 @@ ComputeExecution sampleCloud(const RadialSampler&, const AngularSampler&,
 ComputeExecution advanceCloud(Cloud&, int m, double dt,
                               BackendPreference = BackendPreference::Auto);
 // False means no usable CUDA device or a CUDA error; output is unchanged.
+// Device buffers persist between calls. cudaAdvance validates on the device and
+// throws std::invalid_argument for invalid input, leaving the cloud unchanged.
 bool cudaAvailable();
 bool cudaSample(const RadialSampler&, const AngularSampler&, std::size_t count,
                 std::uint64_t seed, Cloud& output);

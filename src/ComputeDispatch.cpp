@@ -58,14 +58,14 @@ ComputeExecution advanceCloud(Cloud& points, int m, double dt, BackendPreference
             throw std::invalid_argument("Current angle is too large");
     }
     ComputeExecution execution;
-    Cloud updated = points;
     if (preference == BackendPreference::Auto) {
         if (!cudaAvailable()) execution.fallbackReason = "CUDA unavailable";
-        else if (cudaAdvance(updated, m, dt)) execution.backend = "cuda";
+        // cudaAdvance is transactional and checks results on the device, so it updates in place.
+        else if (cudaAdvance(points, m, dt)) { execution.backend = "cuda"; return execution; }
         else execution.fallbackReason = "CUDA current update failed";
     }
-    if (execution.backend == "cpu")
-        for (auto& p : updated) advanceProbabilityCurrent(p[0], p[2], m, dt);
+    Cloud updated = points;
+    for (auto& p : updated) advanceProbabilityCurrent(p[0], p[2], m, dt);
     for (const auto& p : updated)
         for (double coordinate : p)
             if (!std::isfinite(coordinate)) throw std::domain_error("Nonfinite current coordinate");
