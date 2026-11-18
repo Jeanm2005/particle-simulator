@@ -56,6 +56,27 @@ export interface Sonification {
   wavBase64: string;
 }
 export interface SonificationResponse { runId: string; sonification: Sonification }
+export interface LatticeRequest {
+  contractVersion: number;
+  model: "lattice-phonons";
+  lattice: { cells: number; massRatio: number; branch: "acoustic" | "optical"; modeIndex: number; amplitude: number };
+}
+export interface LatticeResult {
+  runId: string;
+  request: LatticeRequest;
+  wavenumber: number;
+  angularFrequency: number;
+  groupVelocity: number;
+  soundSpeed: number;
+  acousticMax: number;
+  opticalMin: number;
+  opticalMax: number;
+  displayGain: number;
+  timeReduced: number;
+  atomCount: number;
+  points: [number, number, number][];
+  dispersion: [number, number, number][];
+}
 export interface Catalog {
   contractVersion: number;
   model: string;

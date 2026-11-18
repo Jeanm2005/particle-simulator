@@ -1,6 +1,6 @@
 import createPhysics from "./physics.mjs";
-import { encodeSample, ApiFailure } from "./protocol.js";
-import type { Request } from "./types.js";
+import { encodeSample, encodeLattice, ApiFailure } from "./protocol.js";
+import type { LatticeRequest, Request } from "./types.js";
 const scope = self as unknown as { onmessage: ((event: MessageEvent) => void) | null; postMessage(value: unknown): void };
 const ready = createPhysics({ locateFile: path => new URL(path, import.meta.url).href }).then(module => new module.BrowserSession());
 let runId: string | null = null;
@@ -11,6 +11,7 @@ scope.onmessage = async event => {
     let command: string;
     if (path === "/api/catalog") command = "catalog";
     else if (path === "/api/sample") command = encodeSample(body as Request);
+    else if (path === "/api/lattice") command = encodeLattice(body as LatticeRequest);
     else if (path === "/api/advance") {
       const advance = body as { runId: string; dt: number };
       if (!runId || advance.runId !== runId) throw new ApiFailure("This run is no longer active; sample again", "runId", "invalid-input");
@@ -26,7 +27,7 @@ scope.onmessage = async event => {
     } else throw new ApiFailure("Unknown operation", "", "invalid-input");
     const payload = JSON.parse(session.execute(command)) as Record<string, unknown>;
     if (!payload.error) {
-      if (path === "/api/sample") runId = crypto.randomUUID();
+      if (path === "/api/sample" || path === "/api/lattice") runId = crypto.randomUUID();
       if (path !== "/api/catalog") payload.runId = runId;
     }
     scope.postMessage({ id, payload });

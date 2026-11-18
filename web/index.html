@@ -15,15 +15,16 @@
     <span id="connection" class="connection">Connecting to local backend…</span>
   </header>
   <main>
-    <div class="intro"><div><p class="eyebrow">01 / ATOMIC ORBITALS</p><h1>Explore a quantum state.</h1><p>Choose an orbital or combine two states to explore interference.</p></div><span class="model-badge">Provisional demo · in development</span></div>
-    <div class="demo-context"><p>This is an actively developed quantum/particle simulator. Try hydrogen 1s, a 2p orbital, or evolving 1s + 2p interference. GPU performance and broader particle models remain under development.</p><a href="https://github.com/Jeanm2005/particle-simulator" target="_blank" rel="noopener noreferrer">Source &amp; roadmap</a><button id="try-interference" type="button">Try 1s + 2p interference</button></div>
+    <div class="intro"><div><p class="eyebrow">01 / ATOMIC ORBITALS</p><h1>Explore a quantum state.</h1><p>Choose an orbital, combine two states to explore interference, or excite a lattice phonon.</p></div><span class="model-badge">Provisional demo · in development</span></div>
+    <div class="demo-context"><p>This is an actively developed quantum/particle simulator. Try hydrogen 1s, a 2p orbital, evolving 1s + 2p interference, or phonon modes of a diatomic lattice.</p><a href="https://github.com/Jeanm2005/particle-simulator" target="_blank" rel="noopener noreferrer">Source &amp; roadmap</a><button id="try-interference" type="button">Try 1s + 2p interference</button></div>
     <div class="workspace">
       <aside class="controls">
         <form id="state-form">
           <fieldset id="setup" disabled>
             <legend>Define the state</legend>
             <label for="model">Physics model</label>
-            <select id="model"><option value="hydrogenic-orbital">Hydrogenic orbital</option><option value="orbital-superposition">Two-orbital superposition</option><option disabled>Lattice dynamics · exploratory</option></select>
+            <select id="model"><option value="hydrogenic-orbital">Hydrogenic orbital</option><option value="orbital-superposition">Two-orbital superposition</option><option value="lattice-phonons">Lattice phonons · 1D chain</option></select>
+            <fieldset id="orbital-controls">
             <label for="element">Element</label>
             <select id="element"><option>Loading element database…</option></select>
             <label for="atomic-number">Atomic number Z</label>
@@ -48,27 +49,43 @@
             <div class="pair"><div><label for="samples">Samples</label><input id="samples" name="sampleCount" type="number" min="1" max="1000000" step="1" value="50000" required></div><div><label for="seed">Random seed</label><input id="seed" name="seed" type="number" min="0" max="4294967295" step="1" value="42" required></div></div>
             <label for="backend">Compute backend</label>
             <select id="backend"><option value="auto">Automatic · CUDA / CPU</option><option value="cpu">CPU · reproducible stream</option></select>
+            </fieldset>
+            <fieldset id="lattice-controls" hidden disabled>
+              <p class="hint">Diatomic harmonic chain · periodic boundaries · reduced units K = m₁ = a = 1</p>
+              <div class="pair"><div><label for="cells">Unit cells N</label><input id="cells" type="number" min="2" max="256" step="1" value="32" required></div><div><label for="mass-ratio">Mass ratio m₂/m₁</label><input id="mass-ratio" type="number" min="0.1" max="10" step="any" value="2" required></div></div>
+              <label for="branch">Branch</label>
+              <select id="branch"><option value="acoustic">Acoustic · atoms move together</option><option value="optical">Optical · sublattices oppose</option></select>
+              <div class="pair"><div><label for="mode-index">Mode index j</label><input id="mode-index" type="number" min="-15" max="16" step="1" value="4" required></div><div><label for="amplitude">Amplitude <small>cells</small></label><input id="amplitude" type="number" min="0.01" max="0.25" step="any" value="0.1" required></div></div>
+              <p class="hint">Wavenumber k = 2πj / N with −N/2 &lt; j ≤ N/2.</p>
+            </fieldset>
             <button id="sample" class="primary" type="submit">Sample orbital <span aria-hidden="true">↗</span></button>
           </fieldset>
         </form>
         <p id="status" class="status" role="status" aria-live="polite">Loading model capabilities…</p>
         <p id="error" class="error" role="alert" hidden></p>
         <button id="reconnect" type="button" hidden>Reconnect</button>
-        <div class="model-note"><p class="eyebrow">MODEL LIMITS</p><p>Nonrelativistic orbitals in a fixed central potential. Single states have stationary density; superpositions evolve through relative energy phases. Neutral atoms use an approximate orbital model.</p><p>No collisions, radiation, spin dynamics, or external fields. Browser demos use CPU physics; native CUDA and ray marching are separate implementations.</p></div>
+        <div class="model-note"><p class="eyebrow">MODEL LIMITS</p><p id="limits-orbital">Nonrelativistic orbitals in a fixed central potential. Single states have stationary density; superpositions evolve through relative energy phases. Neutral atoms use an approximate orbital model.</p><p id="limits-orbital-2">No collisions, radiation, spin dynamics, or external fields. Browser demos use CPU physics; native CUDA and ray marching are separate implementations.</p><p id="limits-lattice" hidden>Harmonic springs between nearest neighbours only, periodic boundaries, one dimension. Normal modes are exact; there is no anharmonic scattering, damping, temperature, or quantization of phonon number.</p></div>
       </aside>
       <section class="results" aria-label="Orbital results">
-        <div class="viewer-header"><div><p class="eyebrow">ELECTRON PROBABILITY DENSITY</p><h2 id="active-state">Ready to explore</h2></div><button id="reset-camera" type="button">Reset view</button></div>
-        <div class="canvas-wrap"><canvas id="cloud" tabindex="0" aria-label="3D probability cloud. Drag to orbit, scroll to zoom. Arrow keys rotate; plus and minus zoom."></canvas><div id="empty" class="empty"><span>ψ</span><p>Your orbital will appear here.</p><small>Start with hydrogen 1s, or choose a different state.</small></div><div class="view-caption">Y polar axis · coordinates in a₀</div><p id="renderer-error" class="renderer-error" role="status" hidden></p></div>
+        <div class="viewer-header"><div><p id="view-eyebrow" class="eyebrow">ELECTRON PROBABILITY DENSITY</p><h2 id="active-state">Ready to explore</h2></div><button id="reset-camera" type="button">Reset view</button></div>
+        <div class="canvas-wrap"><canvas id="cloud" tabindex="0" aria-label="3D probability cloud. Drag to orbit, scroll to zoom. Arrow keys rotate; plus and minus zoom."></canvas><div id="empty" class="empty"><span>ψ</span><p>Your orbital will appear here.</p><small>Start with hydrogen 1s, or choose a different state.</small></div><div id="view-caption" class="view-caption">Y polar axis · coordinates in a₀</div><p id="renderer-error" class="renderer-error" role="status" hidden></p></div>
         <div class="viewer-footer"><span>Drag to orbit · scroll to zoom</span><span id="preview">No samples yet</span></div>
-        <div class="metrics">
+        <div class="metrics" id="orbital-metrics">
           <div><span>Energy <small>eV</small></span><strong id="energy">—</strong></div>
           <div><span>Mean radius <small>a₀</small></span><strong id="radius">—</strong></div>
           <div id="centroid-metric" hidden><span>Mean Y <small>a₀</small></span><strong id="centroid">—</strong></div>
           <div><span>Effective charge</span><strong id="charge">—</strong></div>
           <div><span>Samples</span><strong id="count">—</strong></div>
         </div>
-        <div class="flow-panel"><div><h3 id="dynamics-title">Probability current</h3><p id="flow-description">Rotation about Y preserves radius and height.</p></div><div class="flow-controls"><label for="dt">Step Δt <small>atomic units</small></label><input id="dt" type="number" value="0.1" min="-1000" max="1000" step="any" required><button id="step" type="button" disabled>Step</button><button id="play" type="button" disabled aria-pressed="false">Play</button></div><p class="flow-time">Model time: <span id="time">0</span> atomic units · Playback advances one Δt per computed snapshot.</p></div>
-        <div class="flow-panel sonify-panel"><div><h3 id="sonify-title">Density sonification</h3><p id="sonify-description">Amplitude follows radial density r²|R|² from the nucleus outward; silences mark radial nodes.</p></div><div class="flow-controls"><label for="duration">Length <small>seconds</small></label><input id="duration" type="number" value="3" min="0.5" max="10" step="any" required><label for="tone">Tone <small>Hz</small></label><input id="tone" type="number" value="220" min="55" max="1760" step="any" required><button id="sonify" type="button" disabled>Generate audio</button></div><div class="audio-row"><audio id="audio" controls hidden></audio><a id="download" class="download" hidden>Download WAV</a></div><p id="sonify-result" class="flow-time">Sample a single orbital to generate audio. Sonification is a mapping of model data; orbitals do not emit audible sound.</p></div>
+        <div class="metrics" id="lattice-metrics" hidden>
+          <div><span>Frequency ω <small>√(K/m₁)</small></span><strong id="omega">—</strong></div>
+          <div><span>Wavenumber k <small>π/a</small></span><strong id="wavenumber">—</strong></div>
+          <div><span>Group velocity <small>a√(K/m₁)</small></span><strong id="group-velocity">—</strong></div>
+          <div><span>Band gap <small>ω</small></span><strong id="band-gap">—</strong></div>
+        </div>
+        <div class="dispersion-panel" id="dispersion-panel" hidden><div class="dispersion-head"><h3>Dispersion relation ω(k)</h3><span class="legend"><i class="acoustic"></i>Acoustic <i class="optical"></i>Optical <i class="marker"></i>Selected mode</span></div><canvas id="dispersion" role="img" aria-label="Phonon dispersion: acoustic and optical branches with the selected mode marked"></canvas></div>
+        <div class="flow-panel"><div><h3 id="dynamics-title">Probability current</h3><p id="flow-description">Rotation about Y preserves radius and height.</p></div><div class="flow-controls"><label for="dt">Step Δt <small id="dt-unit">atomic units</small></label><input id="dt" type="number" value="0.1" min="-1000" max="1000" step="any" required><button id="step" type="button" disabled>Step</button><button id="play" type="button" disabled aria-pressed="false">Play</button></div><p class="flow-time">Model time: <span id="time">0</span> <span id="time-unit">atomic units</span> · Playback advances one Δt per computed snapshot.</p></div>
+        <div class="flow-panel sonify-panel" id="sonify-panel"><div><h3 id="sonify-title">Density sonification</h3><p id="sonify-description">Amplitude follows radial density r²|R|² from the nucleus outward; silences mark radial nodes.</p></div><div class="flow-controls"><label for="duration">Length <small>seconds</small></label><input id="duration" type="number" value="3" min="0.5" max="10" step="any" required><label for="tone">Tone <small>Hz</small></label><input id="tone" type="number" value="220" min="55" max="1760" step="any" required><button id="sonify" type="button" disabled>Generate audio</button></div><div class="audio-row"><audio id="audio" controls hidden></audio><a id="download" class="download" hidden>Download WAV</a></div><p id="sonify-result" class="flow-time">Sample a single orbital to generate audio. Sonification is a mapping of model data; orbitals do not emit audible sound.</p></div>
         <p id="execution" class="execution">Execution details will appear after sampling.</p>
         <p id="interpretation" class="interpretation">Points represent samples of |ψ|². Color and brightness are display mappings; the cloud does not show individual electron trajectories. Mean radius is a sampled estimate.</p>
       </section>

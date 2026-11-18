@@ -1,4 +1,4 @@
-import type { Request } from "./types.js";
+import type { LatticeRequest, Request } from "./types.js";
 export class ApiFailure extends Error {
   constructor(message: string, readonly field = "", readonly code = "") { super(message); }
 }
@@ -23,4 +23,8 @@ export function encodeSample(request: Request): string {
     command.push(whole(c.state.n, "superposition.state.n"), whole(c.state.l, "superposition.state.l"), whole(c.state.m, "superposition.state.m"), real(c.weight, "superposition.weight"), real(c.phase, "superposition.phase"));
   }
   return command.join(" ");
+}
+export function encodeLattice(request: LatticeRequest): string {
+  const c = request.lattice;
+  return ["lattice", whole(request.contractVersion, "contractVersion"), text(request.model, "model"), whole(c.cells, "lattice.cells"), real(c.massRatio, "lattice.massRatio"), text(c.branch, "lattice.branch"), whole(c.modeIndex, "lattice.modeIndex"), real(c.amplitude, "lattice.amplitude")].join(" ");
 }

@@ -1,4 +1,5 @@
-import type { Catalog, Request, Result, SonificationResponse } from "./types.js";
+import type { Catalog, LatticeRequest, LatticeResult, Request, Result, SonificationResponse } from "./types.js";
+import { drawDispersion } from "./dispersion.js";
 import { CloudViewer } from "./viewer.js";
 import { browserApi, browserEngine } from "./browser-api.js";
 import { ApiFailure } from "./protocol.js";
@@ -20,10 +21,14 @@ const audio = element<HTMLAudioElement>("audio");
 const download = element<HTMLAnchorElement>("download");
 let audioUrl: string | null = null;
 const fieldIds: Record<string, string> = { "element.atomicNumber": "atomic-number", "state.n": "n", "state.l": "l", "state.m": "m", "sampleCount": "samples", "screening": "screening", "seed": "seed", "backend": "backend", "model": "model", "dt": "dt" };
+Object.assign(fieldIds, { "lattice.cells": "cells", "lattice.massRatio": "mass-ratio", "lattice.branch": "branch", "lattice.modeIndex": "mode-index", "lattice.amplitude": "amplitude" });
 Object.assign(fieldIds, { "sonification.durationSeconds": "duration", "sonification.baseFrequencyHz": "tone" });
 Object.assign(fieldIds, { "superposition.state": "second-n", "superposition.state.n": "second-n", "superposition.state.l": "second-l", "superposition.state.m": "second-m", "superposition.weight": "weight", "superposition.phase": "phase" });
 let catalog: Catalog | null = null;
 let result: Result | null = null;
+let chain: LatticeResult | null = null;
+const dispersionCanvas = element<HTMLCanvasElement>("dispersion");
+new ResizeObserver(() => { if (chain) drawDispersion(dispersionCanvas, chain); }).observe(dispersionCanvas);
 let busy = false, playing = false, dirty = false;
 let timer: number | undefined;
 let viewer: CloudViewer | null = null;
@@ -71,10 +76,11 @@ function showError(reason: unknown): void {
 }
 function updateButtons(): void {
   setup.disabled = busy || catalog === null;
-  step.disabled = busy || !result || dirty || playing;
-  play.disabled = !result || dirty || (busy && !playing);
+  const active = result ?? chain;
+  step.disabled = busy || !active || dirty || playing;
+  play.disabled = !active || dirty || (busy && !playing);
   sonifyButton.disabled = busy || !result || dirty || playing;
-  sample.textContent = busy ? "Computing…" : "Sample orbital ↗";
+  sample.textContent = busy ? "Computing…" : selected("model") === "lattice-phonons" ? "Compute normal mode ↗" : "Sample orbital ↗";
   play.textContent = playing ? "Pause" : "Play";
   play.setAttribute("aria-pressed", String(playing));
 }
@@ -88,8 +94,43 @@ function request(): Request {
   if (request.model === "orbital-superposition") request.superposition = { state: { n: value("second-n"), l: value("second-l"), m: value("second-m") }, weight: value("weight"), phase: value("phase") };
   return request;
 }
+function latticeRequest(): LatticeRequest {
+  return { contractVersion: catalog?.contractVersion ?? 1, model: "lattice-phonons", lattice: { cells: value("cells"), massRatio: value("mass-ratio"), branch: selected("branch") as "acoustic" | "optical", modeIndex: value("mode-index"), amplitude: value("amplitude") } };
+}
+function showModelPanels(lattice: boolean): void {
+  element("orbital-metrics").hidden = lattice;
+  element("lattice-metrics").hidden = !lattice;
+  element("dispersion-panel").hidden = !lattice;
+  element("sonify-panel").hidden = lattice;
+  element("view-caption").textContent = lattice ? "X along the chain · Y = displacement × display gain · lattice constants" : "Y polar axis · coordinates in a₀";
+  element("time-unit").textContent = lattice ? "reduced units √(m₁/K)" : "atomic units";
+  element("dt-unit").textContent = lattice ? "reduced units" : "atomic units";
+  element("view-eyebrow").textContent = lattice ? "ATOMIC DISPLACEMENTS" : "ELECTRON PROBABILITY DENSITY";
+  viewer?.setChainMode(lattice);
+}
+function displayLattice(next: LatticeResult, reset: boolean): void {
+  chain = next; result = null;
+  showModelPanels(true);
+  const c = next.request.lattice;
+  const fixed = (x: number, digits = 4) => x.toLocaleString(undefined, { maximumFractionDigits: digits });
+  element("active-state").textContent = `Diatomic chain / ${c.branch} / j = ${c.modeIndex} of ${c.cells}`;
+  element("omega").textContent = fixed(next.angularFrequency);
+  element("wavenumber").textContent = fixed(next.wavenumber / Math.PI);
+  element("group-velocity").textContent = fixed(next.groupVelocity);
+  element("band-gap").textContent = next.opticalMin - next.acousticMax > 1e-9 ? `${fixed(next.acousticMax, 3)}–${fixed(next.opticalMin, 3)}` : "none";
+  element("time").textContent = fixed(next.timeReduced);
+  element("preview").textContent = `${next.atomCount.toLocaleString()} atoms · display gain ×${fixed(next.displayGain, 1)}`;
+  element("dynamics-title").textContent = "Phonon normal mode";
+  element("flow-description").textContent = next.angularFrequency < 1e-9 ? "k = 0 acoustic mode: a uniform translation with zero frequency." : "Exact traveling normal mode; each step evaluates u(n, t) analytically, so no integration error accumulates.";
+  element("execution").textContent = `Analytic normal mode in C++. Sound speed ${fixed(next.soundSpeed)} a√(K/m₁); optical maximum ${fixed(next.opticalMax)}.`;
+  element("interpretation").textContent = `Harmonic nearest-neighbour springs with periodic boundaries in reduced units (K = m₁ = a = 1). Displacements are longitudinal; the vertical offset is a ×${fixed(next.displayGain, 1)} display gain, not a transverse motion. No anharmonicity, damping, temperature, or three-dimensional structure.`;
+  element("empty").hidden = true;
+  viewer?.setPoints(next.points, reset);
+  drawDispersion(dispersionCanvas, next);
+}
 function display(next: Result, reset: boolean): void {
-  result = next;
+  result = next; chain = null;
+  showModelPanels(false);
   const q = next.request.state;
   const orbital = `${q.n}${"spdf"[q.l]}`;
   const coherent = next.request.superposition;
@@ -114,6 +155,16 @@ function display(next: Result, reset: boolean): void {
 async function sampleState(): Promise<void> {
   if (busy || !form.reportValidity()) return;
   pause(); clearError(); busy = true; updateButtons();
+  if (selected("model") === "lattice-phonons") {
+    status.textContent = "Computing the normal mode…";
+    try {
+      const next = await api<LatticeResult>("/api/lattice", latticeRequest());
+      dirty = false; clearAudio(""); displayLattice(next, true);
+      status.textContent = "Ready. Exact harmonic normal mode; step or play to evolve it.";
+    } catch (reason) { status.textContent = "Computation failed. Previous results remain visible."; showError(reason); }
+    finally { busy = false; updateButtons(); }
+    return;
+  }
   status.textContent = "Sampling the validated orbital…";
   try {
     const next = await api<Result>("/api/sample", request());
@@ -126,12 +177,14 @@ async function sampleState(): Promise<void> {
   finally { busy = false; updateButtons(); }
 }
 async function advance(): Promise<void> {
-  if (busy || !result || dirty) return;
+  const active = result ?? chain;
+  if (busy || !active || dirty) return;
   const input = element<HTMLInputElement>("dt");
   if (!input.reportValidity() || !Number.isFinite(input.valueAsNumber)) { pause(); return; }
   clearError(); busy = true; updateButtons();
   try {
-    display(await api<Result>("/api/advance", { runId: result.runId, dt: input.valueAsNumber }), false);
+    if (chain) displayLattice(await api<LatticeResult>("/api/advance", { runId: active.runId, dt: input.valueAsNumber }), false);
+    else display(await api<Result>("/api/advance", { runId: active.runId, dt: input.valueAsNumber }), false);
   } catch (reason) { showError(reason); }
   finally {
     busy = false; updateButtons();
@@ -173,6 +226,19 @@ async function sonify(): Promise<void> {
   finally { busy = false; updateButtons(); }
 }
 function syncRanges(): void {
+  const lattice = selected("model") === "lattice-phonons";
+  element("limits-orbital").hidden = lattice;
+  element("limits-orbital-2").hidden = lattice;
+  element("limits-lattice").hidden = !lattice;
+  element("orbital-controls").hidden = lattice;
+  (element("orbital-controls") as HTMLFieldSetElement).disabled = lattice;
+  element("lattice-controls").hidden = !lattice;
+  (element("lattice-controls") as HTMLFieldSetElement).disabled = !lattice;
+  const cells = value("cells");
+  if (Number.isFinite(cells)) {
+    element<HTMLInputElement>("mode-index").min = String(Math.floor(-cells / 2) + 1);
+    element<HTMLInputElement>("mode-index").max = String(Math.floor(cells / 2));
+  }
   const coherent = selected("model") === "orbital-superposition";
   const maxN = coherent ? catalog?.maxSuperpositionN ?? 4 : catalog?.maxN ?? 7;
   element<HTMLInputElement>("n").max = String(maxN);
@@ -199,13 +265,14 @@ form.addEventListener("input", event => {
     const z = String(value("atomic-number"));
     element<HTMLSelectElement>("element").value = catalog?.elements.some(e => String(e.atomicNumber) === z) ? z : "custom";
   }
+  if ((event.target as HTMLElement).id === "model" && selected("model") === "lattice-phonons") element<HTMLInputElement>("dt").value = "0.5";
   if ((event.target as HTMLElement).id === "model" && selected("model") === "orbital-superposition") {
     element<HTMLSelectElement>("screening").value = "pure-z";
     element<HTMLInputElement>("samples").value = "2000";
     element<HTMLInputElement>("dt").value = "1";
     if (value("n") > 4) element<HTMLInputElement>("n").value = "1";
   }
-  syncRanges(); status.textContent = result ? "Inputs changed. Sample orbital to apply; previous results remain visible." : "Ready to sample."; updateButtons();
+  syncRanges(); status.textContent = result || chain ? "Inputs changed. Compute again to apply; previous results remain visible." : "Ready to sample."; updateButtons();
 });
 step.addEventListener("click", () => void advance());
 sonifyButton.addEventListener("click", () => void sonify());

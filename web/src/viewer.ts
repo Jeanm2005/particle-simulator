@@ -10,6 +10,7 @@ export class CloudViewer {
   private drag: { x: number; y: number } | null = null;
   private axis: WebGLBuffer;
   private disposed = false;
+  private chain = false;
 
   constructor(private canvas: HTMLCanvasElement) {
     const gl = canvas.getContext("webgl", { antialias: true, alpha: false });
@@ -19,6 +20,7 @@ export class CloudViewer {
       attribute vec3 point;
       uniform float scale, yaw, pitch, distance, aspect;
       uniform mediump float axes;
+      uniform float pointSize;
       varying mediump float radius;
       void main() {
         vec3 p = point / scale;
@@ -27,18 +29,18 @@ export class CloudViewer {
         p = vec3(p.x, cos(pitch)*p.y - sin(pitch)*p.z, sin(pitch)*p.y + cos(pitch)*p.z);
         float depth = distance - p.z;
         gl_Position = vec4(p.x*2.414/aspect, p.y*2.414, 0.98*depth-0.1, depth);
-        gl_PointSize = axes > 0.5 ? 1.0 : 2.2;
+        gl_PointSize = axes > 0.5 ? 1.0 : pointSize;
       }`);
     const fragment = this.shader(gl.FRAGMENT_SHADER, `
       precision mediump float;
-      uniform float axes;
+      uniform float axes, alpha;
       varying float radius;
       void main() {
         if (axes > 0.5) { gl_FragColor = vec4(0.40,0.58,0.67,0.4); return; }
         float d = length(gl_PointCoord - vec2(0.5));
         if (d > 0.5) discard;
         vec3 color = mix(vec3(1.0,0.73,0.35),vec3(0.24,0.69,0.89),clamp(radius*1.4,0.0,1.0));
-        gl_FragColor = vec4(color, 0.36*(1.0-d));
+        gl_FragColor = vec4(color, alpha*(1.0-d));
       }`);
     const program = gl.createProgram();
     if (!program) throw new Error("Could not create the cloud renderer");
@@ -102,7 +104,9 @@ export class CloudViewer {
     this.gl.bufferData(this.gl.ARRAY_BUFFER, flat, this.gl.DYNAMIC_DRAW);
     if (reset) this.reset(); else this.draw();
   }
-  reset(): void { this.yaw = 0.65; this.pitch = 0.25; this.distance = 3.2; this.draw(); }
+  // Chains are drawn face-on with larger, opaque atoms; clouds keep the oblique view.
+  setChainMode(chain: boolean): void { this.chain = chain; }
+  reset(): void { this.yaw = this.chain ? 0 : 0.65; this.pitch = this.chain ? 0 : 0.25; this.distance = 3.2; this.draw(); }
   zoom(factor: number): void { this.distance = Math.max(1.4, Math.min(15, this.distance * factor)); this.draw(); }
   private draw(): void {
     if (this.disposed) return;
@@ -124,6 +128,7 @@ export class CloudViewer {
     uniform("scale", 1); uniform("axes", 1); gl.drawArrays(gl.LINES, 0, 6);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.buffer);
     gl.vertexAttribPointer(attribute, 3, gl.FLOAT, false, 0, 0);
+    uniform("pointSize", this.chain ? 7 * Math.min(window.devicePixelRatio || 1, 2) : 2.2); uniform("alpha", this.chain ? 0.95 : 0.36);
     uniform("scale", this.scale); uniform("axes", 0); gl.drawArrays(gl.POINTS, 0, this.count);
   }
 }

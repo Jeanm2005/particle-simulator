@@ -106,7 +106,7 @@ test('fractional inputs are blocked and unavailable models stay disabled', async
   await page.locator('#sample').click();
   expect(submissions).toBe(0);
   expect(await page.locator('#samples').evaluate(input => input.validity.stepMismatch)).toBe(true);
-  await expect(page.locator('#model option:disabled')).toHaveCount(1);
+  await expect(page.locator('#model option:disabled')).toHaveCount(0);
 });
 
 test('offline recovery works without fabricated results', async ({ page }) => {
@@ -178,4 +178,54 @@ test('density sonification produces a playable, downloadable WAV with node silen
   await page.locator('#step').click();
   await page.locator('#sonify').click();
   await expect(page.locator('#sonify-result')).toContainText('starting at t = 1 atomic units');
+});
+
+test('lattice phonon mode, dispersion plot and exact time evolution', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await ready(page);
+  await page.locator('#model').selectOption('lattice-phonons');
+  await expect(page.locator('#lattice-controls')).toBeVisible();
+  await expect(page.locator('#element')).toBeHidden();
+  await expect(page.locator('#sample')).toHaveText('Compute normal mode ↗');
+  await page.locator('#cells').fill('16');
+  await page.locator('#mode-index').fill('9');
+  await page.locator('#sample').click();
+  expect(await page.locator('#mode-index').evaluate(input => input.validity.rangeOverflow)).toBe(true);
+  await page.locator('#mode-index').fill('8');
+  await page.locator('#branch').selectOption('optical');
+  await page.locator('#sample').click();
+  await expect(page.locator('#status')).toContainText('Exact harmonic normal mode');
+  await expect(page.locator('#active-state')).toHaveText('Diatomic chain / optical / j = 8 of 16');
+  await expect(page.locator('#omega')).toHaveText('1.4142');
+  await expect(page.locator('#wavenumber')).toHaveText('1');
+  await expect(page.locator('#band-gap')).toHaveText('1–1.414');
+  await expect(page.locator('#orbital-metrics')).toBeHidden();
+  await expect(page.locator('#sonify-panel')).toBeHidden();
+  await expect(page.locator('#view-caption')).toContainText('display gain');
+  await expect(page.locator('#view-eyebrow')).toHaveText('ATOMIC DISPLACEMENTS');
+  await expect(page.locator('#limits-lattice')).toBeVisible();
+  const plotted = await page.evaluate(() => {
+    const canvas = document.getElementById('dispersion');
+    const data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+    let amber = 0, blue = 0, white = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i] > 200 && data[i + 1] > 150 && data[i + 2] < 160) amber++;
+      if (data[i] < 120 && data[i + 1] > 140 && data[i + 2] > 200) blue++;
+      if (data[i] > 240 && data[i + 1] > 240 && data[i + 2] > 240) white++;
+    }
+    return { amber, blue, white };
+  });
+  expect(plotted.amber).toBeGreaterThan(200);
+  expect(plotted.blue).toBeGreaterThan(200);
+  expect(plotted.white).toBeGreaterThan(20);
+  await page.locator('#step').click();
+  await expect(page.locator('#time')).toHaveText('0.5');
+  await page.locator('#model').selectOption('hydrogenic-orbital');
+  await page.locator('#samples').fill('1000');
+  await sample(page);
+  await expect(page.locator('#orbital-metrics')).toBeVisible();
+  await expect(page.locator('#dispersion-panel')).toBeHidden();
+  await expect(page.locator('#sonify-panel')).toBeVisible();
+  expect(errors).toEqual([]);
 });
