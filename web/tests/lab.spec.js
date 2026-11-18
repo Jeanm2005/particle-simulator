@@ -169,7 +169,13 @@ test('density sonification produces a playable, downloadable WAV with node silen
   await expect(page.locator('#sonify')).toBeDisabled();
   await page.locator('#try-interference').click();
   await expect(page.locator('#status')).toContainText('Coherent two-state density');
-  await expect(page.locator('#sonify')).toBeDisabled();
   await expect(page.locator('#audio')).toBeHidden();
-  await expect(page.locator('#sonify-result')).toContainText('not available yet');
+  await expect(page.locator('#sonify-title')).toHaveText('Interference sonification');
+  await page.locator('#sonify').click();
+  await expect(page.locator('#sonify-result')).toContainText('0.375 Eₕ → 220 Hz tone');
+  await expect(page.locator('#sonify-result')).toContainText('amplitude 0.745 a₀');
+  await expect(page.locator('#download')).toHaveAttribute('download', 'H_1s+2p_interference.wav');
+  await page.locator('#step').click();
+  await page.locator('#sonify').click();
+  await expect(page.locator('#sonify-result')).toContainText('starting at t = 1 atomic units');
 });

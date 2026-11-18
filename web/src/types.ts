@@ -42,10 +42,16 @@ export interface Sonification {
   durationSeconds: number;
   sampleRate: number;
   baseFrequencyHz: number;
-  scanRadiusA0: number;
+  toneFrequencyHz: number;
+  scanRadiusA0?: number;
+  nodeRadiiA0?: number[];
+  secondState?: { n: number; l: number; m: number };
+  startTimeAtomicUnits?: number;
+  bohrFrequencyAtomicUnits?: number;
+  dipoleAmplitudeA0?: number;
+  silentReason?: string;
   frames: number;
   peakFraction: number;
-  nodeRadiiA0: number[];
   mimeType: string;
   wavBase64: string;
 }

@@ -176,9 +176,30 @@ class TransportTests(unittest.TestCase):
         coherent = request(model="orbital-superposition", sampleCount=100,
                            superposition={"state": {"n": 2, "l": 1, "m": 0}, "weight": 0.5, "phase": 0})
         _, mixed = self.call("/api/sample", coherent)
-        status, error = self.call("/api/sonify", dict(body, runId=mixed["runId"]))
+        status, beat = self.call("/api/sonify", dict(body, runId=mixed["runId"]))
+        self.assertEqual(status, 200)
+        audio = beat["sonification"]
+        self.assertEqual(audio["mapping"], "interference-dipole")
+        self.assertEqual(audio["toneFrequencyHz"], 220)
+        self.assertEqual(audio["bohrFrequencyAtomicUnits"], 0.375)
+        self.assertAlmostEqual(audio["dipoleAmplitudeA0"], 128 * math.sqrt(2) / 243, places=3)
+        self.assertEqual(audio["silentReason"], "")
+        _, moved = self.call("/api/advance", {"runId": mixed["runId"], "dt": 1})
+        status, later = self.call("/api/sonify", dict(body, runId=mixed["runId"]))
+        self.assertEqual(later["sonification"]["startTimeAtomicUnits"], 1)
+        self.assertNotEqual(later["sonification"]["wavBase64"], audio["wavBase64"])
+        forbidden = json.loads(json.dumps(coherent))
+        forbidden["superposition"]["state"] = {"n": 2, "l": 0, "m": 0}
+        _, silent = self.call("/api/sample", forbidden)
+        status, quiet = self.call("/api/sonify", dict(body, runId=silent["runId"]))
+        self.assertEqual(quiet["sonification"]["silentReason"], "dipole-forbidden")
+        self.assertEqual(set(base64.b64decode(quiet["sonification"]["wavBase64"])[44:]), {0})
+        degenerate = json.loads(json.dumps(coherent))
+        degenerate["state"] = {"n": 2, "l": 0, "m": 0}
+        _, flat = self.call("/api/sample", degenerate)
+        status, error = self.call("/api/sonify", dict(body, runId=flat["runId"]))
         self.assertEqual(status, 422)
-        self.assertEqual(error["error"]["code"], "unsupported-model")
+        self.assertEqual(error["error"]["field"], "superposition.state")
 
     def test_worker_failure_and_busy(self):
         self.worker.lock.acquire()

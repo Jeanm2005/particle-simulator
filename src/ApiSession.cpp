@@ -68,10 +68,24 @@ void sonification(std::ostream& out, const qm::SonificationResult& s) {
         << ",\"state\":{\"n\":" << s.state.n << ",\"l\":" << s.state.l << ",\"m\":" << s.state.m << '}'
         << ",\"effectiveCharge\":" << s.effectiveCharge << ",\"durationSeconds\":" << s.request.durationSeconds
         << ",\"sampleRate\":" << s.request.sampleRate << ",\"baseFrequencyHz\":" << s.request.baseFrequencyHz
-        << ",\"scanRadiusA0\":" << s.scanRadiusA0 << ",\"frames\":" << s.pcm.size()
+        << ",\"toneFrequencyHz\":" << s.request.baseFrequencyHz << ",\"scanRadiusA0\":" << s.scanRadiusA0 << ",\"frames\":" << s.pcm.size()
         << ",\"peakFraction\":" << qm::sonificationPeak << ",\"nodeRadiiA0\":[";
     for (std::size_t i = 0; i < s.nodeRadiiA0.size(); ++i) out << (i ? "," : "") << s.nodeRadiiA0[i];
     out << "],\"mimeType\":\"audio/wav\",\"wavBase64\":\"" << base64(qm::encodeWav(s.pcm, s.request.sampleRate)) << "\"}}";
+}
+void interference(std::ostream& out, const qm::InterferenceSonification& s, const qm::SuperpositionRequest& r) {
+    out << "{\"contractVersion\":1,\"sonification\":{\"mapping\":"; string(out, qm::interferenceMapping);
+    out << ",\"mappingVersion\":1"
+        << ",\"label\":\"Sonification: the tone traces the oscillating dipole <y>(t) of the superposition. Pitch is proportional to the Bohr frequency (hydrogen 1s+2p plays at the base tone); one audio cycle spans one beat period. Orbitals do not emit audible sound.\""
+        << ",\"state\":{\"n\":" << r.orbital.state.n << ",\"l\":" << r.orbital.state.l << ",\"m\":" << r.orbital.state.m << '}'
+        << ",\"secondState\":{\"n\":" << r.second.n << ",\"l\":" << r.second.l << ",\"m\":" << r.second.m << '}'
+        << ",\"effectiveCharge\":" << r.orbital.atomicNumber << ",\"durationSeconds\":" << s.request.durationSeconds
+        << ",\"sampleRate\":" << s.request.sampleRate << ",\"baseFrequencyHz\":" << s.request.baseFrequencyHz
+        << ",\"toneFrequencyHz\":" << s.toneFrequencyHz << ",\"startTimeAtomicUnits\":" << s.startTimeAtomicUnits
+        << ",\"bohrFrequencyAtomicUnits\":" << s.bohrFrequencyAtomicUnits
+        << ",\"dipoleAmplitudeA0\":" << s.dipoleAmplitudeA0 << ",\"silentReason\":"; string(out, s.silentReason);
+    out << ",\"frames\":" << s.pcm.size() << ",\"peakFraction\":" << qm::sonificationPeak
+        << ",\"mimeType\":\"audio/wav\",\"wavBase64\":\"" << base64(qm::encodeWav(s.pcm, s.request.sampleRate)) << "\"}}";
 }
 void element(std::ostream& out, const qm::Element& e) {
     out << "{\"atomicNumber\":" << e.Z << ",\"symbol\":"; string(out, e.symbol);
@@ -143,7 +157,7 @@ std::string ApiSession::execute(const std::string& line) {
                           << ",\"model\":\"hydrogenic-orbital\",\"maxN\":" << caps.maxN << ",\"maxL\":" << caps.maxL
                           << ",\"maxSamples\":" << sampleLimit_ << ",\"maxPreviewPoints\":" << previewLimit
                           << ",\"maxSuperpositionN\":4,\"maxSuperpositionSamples\":20000,\"models\":[\"hydrogenic-orbital\",\"orbital-superposition\"]"
-                          << ",\"sonification\":{\"mapping\":\"radial-density-scan\",\"mappingVersion\":1,\"minDurationSeconds\":0.5,\"maxDurationSeconds\":10,\"sampleRates\":[22050,44100,48000],\"minBaseFrequencyHz\":55,\"maxBaseFrequencyHz\":1760,\"models\":[\"hydrogenic-orbital\"]}"
+                          << ",\"sonification\":{\"mapping\":\"radial-density-scan\",\"mappingVersion\":1,\"minDurationSeconds\":0.5,\"maxDurationSeconds\":10,\"sampleRates\":[22050,44100,48000],\"minBaseFrequencyHz\":55,\"maxBaseFrequencyHz\":1760,\"models\":[\"hydrogenic-orbital\",\"orbital-superposition\"]}"
                           << ",\"units\":{\"coordinates\":\"a0\",\"energy\":\"eV\",\"time\":\"atomic-unit\",\"polarAxis\":\"Y\"},\"elements\":[";
                 bool first = true;
                 for (const auto& e : database_.all()) { if (!first) out << ','; first = false; element(out, e); }
@@ -209,8 +223,10 @@ std::string ApiSession::execute(const std::string& line) {
                 request.baseFrequencyHz = real(input, "sonification.baseFrequencyHz");
                 end(input);
                 qm::validateSonification(request);
-                if (coherent_)
-                    throw qm::ModelError("unsupported-model", "model", "Sonification of superpositions is not available yet");
+                if (coherent_) {
+                    interference(out, qm::sonifyInterference(coherent_->request, coherent_->timeAtomicUnits, request), coherent_->request);
+                    return out.str();
+                }
                 if (!current_) throw qm::ModelError("invalid-input", "runId", "Sample an orbital first");
                 sonification(out, qm::sonifyRadialDensity(current_->request.state, current_->observables.Zeff, request));
             } else throw qm::ModelError("invalid-input", "operation", "Unknown operation");

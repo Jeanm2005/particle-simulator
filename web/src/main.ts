@@ -73,7 +73,7 @@ function updateButtons(): void {
   setup.disabled = busy || catalog === null;
   step.disabled = busy || !result || dirty || playing;
   play.disabled = !result || dirty || (busy && !playing);
-  sonifyButton.disabled = busy || !result || dirty || playing || Boolean(result.request.superposition);
+  sonifyButton.disabled = busy || !result || dirty || playing;
   sample.textContent = busy ? "Computing…" : "Sample orbital ↗";
   play.textContent = playing ? "Pause" : "Play";
   play.setAttribute("aria-pressed", String(playing));
@@ -118,7 +118,9 @@ async function sampleState(): Promise<void> {
   try {
     const next = await api<Result>("/api/sample", request());
     dirty = false; display(next, true);
-    clearAudio(next.request.superposition ? "Sonification of superpositions is not available yet; choose a single orbital." : "Ready to generate audio for this orbital.");
+    clearAudio(next.request.superposition ? "Ready to sonify the interference: the tone follows the oscillating dipole ⟨y⟩(t)." : "Ready to generate audio for this orbital.");
+    element("sonify-title").textContent = next.request.superposition ? "Interference sonification" : "Density sonification";
+    element("sonify-description").textContent = next.request.superposition ? "Pitch is proportional to the Bohr frequency; the waveform follows ⟨y⟩(t) from the current model time." : "Amplitude follows radial density r²|R|² from the nucleus outward; silences mark radial nodes.";
     status.textContent = `Ready. ${next.request.superposition ? "Coherent two-state density" : next.request.screening === "pure-z" ? "Pure Z" : "Approximate Slater screening"}; statistics use all samples.`;
   } catch (reason) { status.textContent = "Sampling failed. Previous results remain visible."; showError(reason); }
   finally { busy = false; updateButtons(); }
@@ -143,7 +145,7 @@ function clearAudio(message: string): void {
   element("sonify-result").textContent = message;
 }
 async function sonify(): Promise<void> {
-  if (busy || !result || dirty || result.request.superposition) return;
+  if (busy || !result || dirty) return;
   const duration = element<HTMLInputElement>("duration"), tone = element<HTMLInputElement>("tone");
   if (!duration.reportValidity() || !tone.reportValidity()) return;
   pause(); clearError(); busy = true; updateButtons();
@@ -155,9 +157,18 @@ async function sonify(): Promise<void> {
     audioUrl = URL.createObjectURL(new Blob([bytes], { type: s.mimeType }));
     audio.src = audioUrl; audio.hidden = false;
     download.href = audioUrl; download.hidden = false;
-    download.download = `${result.element.symbol}_${s.state.n}${"spdf"[s.state.l]}_density_scan.wav`;
-    const nodes = s.nodeRadiiA0.length === 0 ? "No radial nodes" : `${s.nodeRadiiA0.length} ${s.nodeRadiiA0.length === 1 ? "silence" : "silences"} at ${s.nodeRadiiA0.map(r => r.toFixed(3)).join(", ")} a₀`;
-    element("sonify-result").textContent = `${nodes}. Scan 0 → ${s.scanRadiusA0.toLocaleString(undefined, { maximumFractionDigits: 3 })} a₀ over ${s.durationSeconds} s at ${s.sampleRate / 1000} kHz, ${s.baseFrequencyHz} Hz tone. ${s.label}`;
+    const orbital = (q: { n: number; l: number }) => `${q.n}${"spdf"[q.l]}`;
+    const digits = { maximumFractionDigits: 3 };
+    if (s.secondState) {
+      download.download = `${result.element.symbol}_${orbital(s.state)}+${orbital(s.secondState)}_interference.wav`;
+      const reason = s.silentReason === "dipole-forbidden" ? "Silent: these states have no Y dipole coupling (selection rule)." : s.silentReason === "no-coherence" ? "Silent: one state has zero weight, so nothing oscillates." : `Dipole ⟨y⟩ oscillates with amplitude ${s.dipoleAmplitudeA0!.toLocaleString(undefined, digits)} a₀.`;
+      element("sonify-result").textContent = `${reason} Bohr frequency ${Math.abs(s.bohrFrequencyAtomicUnits!).toLocaleString(undefined, { maximumFractionDigits: 4 })} Eₕ → ${s.toneFrequencyHz.toLocaleString(undefined, { maximumFractionDigits: 1 })} Hz tone, starting at t = ${s.startTimeAtomicUnits!.toLocaleString(undefined, digits)} atomic units. ${s.label}`;
+    } else {
+      download.download = `${result.element.symbol}_${orbital(s.state)}_density_scan.wav`;
+      const radii = s.nodeRadiiA0 ?? [];
+      const nodes = radii.length === 0 ? "No radial nodes" : `${radii.length} ${radii.length === 1 ? "silence" : "silences"} at ${radii.map(r => r.toFixed(3)).join(", ")} a₀`;
+      element("sonify-result").textContent = `${nodes}. Scan 0 → ${(s.scanRadiusA0 ?? 0).toLocaleString(undefined, digits)} a₀ over ${s.durationSeconds} s at ${s.sampleRate / 1000} kHz, ${s.baseFrequencyHz} Hz tone. ${s.label}`;
+    }
   } catch (reason) { element("sonify-result").textContent = "Audio generation failed."; showError(reason); }
   finally { busy = false; updateButtons(); }
 }
