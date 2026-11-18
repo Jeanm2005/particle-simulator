@@ -1,5 +1,6 @@
 #include "Sonification.hpp"
 #include "OrbitalModel.hpp"
+#include "Constants.hpp"
 #include <algorithm>
 #include <cmath>
 #include <iostream>
@@ -92,6 +93,73 @@ int main() {
         fails([&] { qm::validateSonification(invalid); }, "sonification.sampleRate");
         invalid = request; invalid.baseFrequencyHz = 5000;
         fails([&] { qm::validateSonification(invalid); }, "sonification.baseFrequencyHz");
-        std::cout << "Sonification envelope, node, scaling, carrier and WAV checks passed\n";
+        // Transition dipoles against tabulated hydrogen radial integrals times angular factors.
+        struct Pair { qm::QuantumNumbers a, b; double expected; };
+        const double third = std::sqrt(1.0 / 3.0), dz = std::sqrt(4.0 / 15.0);
+        for (const auto& pair : {Pair{{1,0,0},{2,1,0}, 128 * std::sqrt(2.0) / 243}, Pair{{1,0,0},{3,1,0}, 0.5167 * third},
+                                 Pair{{2,0,0},{3,1,0}, 3.0648 * third}, Pair{{2,1,0},{3,2,0}, 4.7479 * dz},
+                                 Pair{{2,1,1},{3,2,1}, 4.7479 * std::sqrt(3.0 / 15.0)}}) {
+            const double d = std::abs(qm::dipoleMatrixElementY(pair.a, pair.b, 1.0));
+            if (std::abs(d - pair.expected) > 2e-3 * pair.expected) {
+                std::cerr << pair.a.n << pair.a.l << pair.a.m << "-" << pair.b.n << pair.b.l << pair.b.m << ": " << d << " vs " << pair.expected << '\n';
+                throw std::runtime_error("Transition dipole disagrees with tabulated value");
+            }
+            require(std::abs(std::abs(qm::dipoleMatrixElementY(pair.a, pair.b, 3.0)) - d / 3) < 1e-6 * d, "Dipole does not scale as 1/Z");
+        }
+        for (const auto& forbidden : {Pair{{1,0,0},{2,0,0},0}, Pair{{1,0,0},{3,2,0},0}, Pair{{2,1,-1},{3,2,1},0}, Pair{{2,1,0},{4,3,0},0}})
+            require(std::abs(qm::dipoleMatrixElementY(forbidden.a, forbidden.b, 1.0)) < 1e-9, "Selection rule violated");
+
+        // Validate additional basis combinations: exact <y>(t) against sampled clouds.
+        qm::ElementDatabase elements;
+        qm::SuperpositionModel model(elements);
+        auto pairRequest = [](qm::QuantumNumbers a, qm::QuantumNumbers b, double weight, double phase) {
+            qm::SuperpositionRequest r;
+            r.orbital.model = "orbital-superposition"; r.orbital.state = a; r.second = b;
+            r.orbital.sampleCount = 20000; r.orbital.backend = qm::BackendPreference::Cpu;
+            r.secondWeight = weight; r.relativePhase = phase;
+            return r;
+        };
+        for (const auto& combination : {pairRequest({1,0,0},{2,1,0},0.5,0), pairRequest({1,0,0},{3,1,0},0.3,0.7),
+                                        pairRequest({2,0,0},{3,1,0},0.5,0), pairRequest({2,1,0},{3,2,0},0.6,-1.2),
+                                        pairRequest({2,1,1},{4,2,1},0.5,0), pairRequest({1,0,0},{2,0,0},0.5,0)}) {
+            const double omega = 0.5 / (combination.orbital.state.n * combination.orbital.state.n) - 0.5 / (combination.second.n * combination.second.n);
+            for (double time : {0.0, 0.3 * 2 * qm::PI / omega}) {
+                const auto sampled = model.run(combination, time);
+                double mean = 0, square = 0;
+                for (const auto& p : sampled.orbital.observables.points) { mean += p[1]; square += p[1] * p[1]; }
+                mean /= 20000; square /= 20000;
+                const double error = std::sqrt((square - mean * mean) / 20000);
+                const double exact = qm::superpositionMeanY(combination, time);
+                if (std::abs(mean - exact) > 5 * error + 1e-3) {
+                    std::cerr << "sampled " << mean << " exact " << exact << " sigma " << error << '\n';
+                    throw std::runtime_error("Sampled dipole disagrees with exact expectation");
+                }
+            }
+        }
+        const auto half = pairRequest({1,0,0},{2,1,0},0.5,0);
+        require(std::abs(qm::superpositionMeanY(half, 0) - 256 / (243 * std::sqrt(2.0))) < 1e-4, "Mean Y at t=0 wrong");
+
+        // Interference audio: pitch ratios follow Bohr frequencies; phase follows <y>(t).
+        qm::SonificationRequest tone{1.0, 44100, 220};
+        const auto lyman = qm::sonifyInterference(half, 0, tone);
+        require(std::abs(lyman.toneFrequencyHz - 220) < 1e-9 && lyman.silentReason.empty(), "1s+2p is not at the base tone");
+        require(std::abs(lyman.dipoleAmplitudeA0 - 128 * std::sqrt(2.0) / 243) < 2e-4, "Wrong dipole amplitude");
+        require(std::abs(lyman.pcm[22050] - std::lround(0.8 * 32767 * std::cos(-2 * qm::PI * 220 * 0.5))) <= 2, "Audio phase does not follow <y>");
+        const double lymanPower = power(lyman.pcm, 4410, 39690, 220, 44100);
+        require(lymanPower > 1000 * power(lyman.pcm, 4410, 39690, 330, 44100), "Interference tone frequency wrong");
+        const auto beta = qm::sonifyInterference(pairRequest({1,0,0},{3,1,0},0.5,0), 0, tone);
+        require(std::abs(beta.toneFrequencyHz - 220 * (4.0 / 9) / 0.375) < 1e-9, "Lyman-beta pitch ratio wrong");
+        const auto later = qm::sonifyInterference(half, 2 * qm::PI / 0.375 / 4, tone);
+        require(std::abs(later.pcm[22050] - std::lround(0.8 * 32767 * std::cos(-qm::PI / 2 - 2 * qm::PI * 220 * 0.5))) <= 2,
+                "Start time does not advance the beat phase");
+        require(qm::sonifyInterference(pairRequest({1,0,0},{2,0,0},0.5,0), 0, tone).silentReason == "dipole-forbidden", "1s+2s not silent");
+        const auto incoherent = qm::sonifyInterference(pairRequest({1,0,0},{2,1,0},0.0,0), 0, tone);
+        require(incoherent.silentReason == "no-coherence", "Zero weight is not silent");
+        for (auto v : incoherent.pcm) require(v == 0, "Silent clip contains signal");
+        require(lyman.pcm.front() == 0 && lyman.pcm.back() == 0, "Fades do not reach silence");
+        fails([&] { qm::sonifyInterference(pairRequest({2,0,0},{2,1,0},0.5,0), 0, tone); }, "superposition.state");
+        fails([&] { qm::sonifyInterference(pairRequest({3,0,0},{4,1,0},0.5,0), 0, qm::SonificationRequest{1.0, 44100, 55}); },
+              "sonification.baseFrequencyHz");
+        std::cout << "Sonification, transition dipole, interference and WAV checks passed\n";
     } catch (const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }
 }

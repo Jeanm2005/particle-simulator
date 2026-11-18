@@ -1,5 +1,6 @@
 #pragma once
-#include "Orbital.hpp"
+#include "Superposition.hpp"
+#include <complex>
 #include <cstdint>
 #include <vector>
 
@@ -34,6 +35,32 @@ constexpr double sonificationPeak = 0.8;
 void validateSonification(const SonificationRequest&);
 SonificationResult sonifyRadialDensity(QuantumNumbers state, double effectiveCharge,
                                        const SonificationRequest&);
+// Mapping "interference-dipole" (version 1) for two-state superpositions:
+//   <y>(t) = 2 sqrt(w (1 - w)) Re(d e^{i(phase - omega t)}), d = <1|y|2>, omega = E2 - E1 (hartree).
+//   The tone frequency is baseFrequency * |omega| / 0.375 hartree, so hydrogen 1s+2p
+//   sounds at the base frequency and other pairs keep their Bohr-frequency ratios.
+//   One audio period spans one beat period of model time, starting at the current time;
+//   s_k = peak * fade_k * <y>(t_k) / max|<y>|, with 10 ms raised-cosine fades.
+//   Pairs without a Y dipole (selection rules) or without coherence produce silence.
+struct InterferenceSonification {
+    SonificationRequest request;
+    double startTimeAtomicUnits = 0.0;
+    double bohrFrequencyAtomicUnits = 0.0; // E2 - E1 in hartree
+    double toneFrequencyHz = 0.0;
+    std::complex<double> dipoleY;          // <first|y|second> in a0
+    double dipoleAmplitudeA0 = 0.0;        // amplitude of the oscillating <y>
+    std::string silentReason;              // empty, "dipole-forbidden" or "no-coherence"
+    std::vector<std::int16_t> pcm;
+};
+constexpr const char* interferenceMapping = "interference-dipole";
+constexpr double interferenceReferenceHartree = 0.375;
+
+// <a|y|b> for complex hydrogenic orbitals of charge Z, by quadrature (Y is the polar axis).
+std::complex<double> dipoleMatrixElementY(QuantumNumbers a, QuantumNumbers b, double Z);
+// Exact expectation <y>(t) of the superposition in a0.
+double superpositionMeanY(const SuperpositionRequest&, double time);
+InterferenceSonification sonifyInterference(const SuperpositionRequest&, double startTime,
+                                            const SonificationRequest&);
 // RIFF/WAVE, PCM format 1, mono, 16 bits per sample, little-endian.
 std::vector<std::uint8_t> encodeWav(const std::vector<std::int16_t>& pcm, int sampleRate);
 }

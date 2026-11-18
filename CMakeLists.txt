@@ -159,6 +159,7 @@ if(BUILD_TESTING)
     add_executable(sonification_tests tests/SonificationTests.cpp)
     target_link_libraries(sonification_tests PRIVATE qm_model)
     add_test(NAME sonification_regressions COMMAND sonification_tests)
+    set_tests_properties(sonification_regressions PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
     add_executable(dispatch_tests tests/DispatchTests.cpp src/ComputeDispatch.cpp
         src/QuantumMath.cpp src/RadialSampler.cpp)
     target_include_directories(dispatch_tests PRIVATE include)
