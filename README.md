@@ -21,8 +21,9 @@ CUDA acceleration.
 - **GPU rendering and compute.** Point-cloud and volumetric ray-marching shaders.
   CUDA kernels handle sampling and flow, and fall back to the CPU at build time
   and at runtime.
-- **Density sonification.** Turns an orbital's radial density into audio and
-  exports it as WAV. Each radial node is heard as a silence.
+- **Sonification.** Turns an orbital's radial density into audio, with each
+  radial node heard as a silence. Superpositions play their oscillating dipole
+  at a pitch proportional to the Bohr frequency. Both export as WAV.
 - **Three front ends, one core.** The OpenGL desktop viewer, the local web UI
   (HTTP to a native worker) and the static WebAssembly demo all share the same
   validated `ApiSession` protocol.
@@ -97,7 +98,7 @@ flowchart LR
 |---|---|
 | `src/QuantumMath.cpp`, `src/RadialSampler.cpp` | Wavefunctions, screening, CDF sampling |
 | `src/OrbitalModel.cpp`, `src/Superposition.cpp` | Validated request/result models |
-| `src/Sonification.cpp` | Radial density scan and WAV encoding |
+| `src/Sonification.cpp` | Density scan, transition dipoles, interference audio, WAV |
 | `src/ComputeDispatch.cpp`, `cuda/` | CPU/CUDA dispatch with runtime fallback |
 | `src/Engine.cpp`, `include/RaytraceShaders.hpp` | OpenGL point and ray-march rendering |
 | `src/ApiSession.cpp`, `tools/serve.py` | Line protocol, loopback HTTP server |
@@ -112,12 +113,17 @@ flowchart LR
 - **Probability current.** Samples rotate about Y with v = m / (r sin θ),
   which preserves both radius and height.
 - **Superpositions.** Two distinct eigenstates of one pure-Z Hamiltonian, each
-  with n ≤ 4, evolve through their relative energy phase.
+  with n ≤ 4, evolve through their relative energy phase. Transition dipoles
+  ⟨a|y|b⟩ are computed by quadrature and match tabulated hydrogen values within
+  0.2%. The exact ⟨y⟩(t) agrees with the sampled clouds for six state pairs.
 - **Sonification.** The scan maps r from 0 to 15n²/Z<sub>eff</sub> onto the
   clip's duration. A fixed-pitch tone's amplitude follows the normalized
-  r²|R<sub>nl</sub>|², so the clip contains n − l − 1 silences. The output is
-  16-bit mono WAV. This is a mapping of the data; orbitals do not emit audible
-  sound.
+  r²|R<sub>nl</sub>|², so the clip contains n − l − 1 silences. For a
+  superposition, the waveform follows ⟨y⟩(t). Its pitch scales with
+  |E<sub>2</sub> − E<sub>1</sub>|, and hydrogen 1s+2p plays at the base tone.
+  Pairs with no dipole coupling, which selection rules forbid, are silent.
+  Output is 16-bit mono WAV. These are mappings of the data; orbitals do not
+  emit audible sound.
 
 Not modeled: relativistic effects, spin, external fields, electron-electron
 correlation. For quantitative chemistry, use a Hartree–Fock or DFT package.
@@ -139,7 +145,7 @@ Releases.
 - [x] TypeScript UI, local JSON transport, WebAssembly demo
 - [x] Two-orbital time-dependent interference
 - [x] Orbital density sonification and WAV export
-- [ ] Sonification of interference and additional basis states
+- [x] Interference sonification and validation of additional state pairs
 - [ ] Device-resident CUDA buffers and CUDA/OpenGL interop
 - [ ] Additional validated physics models, such as lattice phonons
 
