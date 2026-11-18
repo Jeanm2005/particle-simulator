@@ -19,8 +19,8 @@ CUDA acceleration.
 - **Time-dependent dynamics.** Probability-current flow, plus normalized
   two-orbital superpositions whose density beats at the Bohr frequency.
 - **GPU rendering and compute.** Point-cloud and volumetric ray-marching shaders.
-  CUDA kernels handle sampling and flow, and fall back to the CPU at build time
-  and at runtime.
+  CUDA kernels handle sampling and flow on persistent device buffers, and fall
+  back to the CPU at build time and at runtime.
 - **Sonification.** Turns an orbital's radial density into audio, with each
   radial node heard as a silence. Superpositions play their oscillating dipole
   at a pitch proportional to the Bohr frequency. Both export as WAV.
@@ -33,20 +33,22 @@ CUDA acceleration.
 
 ## Measured results
 
-RTX 5080 Laptop GPU under WSL2. Medians of warmed runs that include allocations
-and transfers.
+RTX 5080 Laptop GPU under WSL2, CUDA 13.4. Medians of 7 warmed runs measured
+at the application dispatch boundary, so validation and host↔device transfers
+are included.
 
-| Particles | CPU sampling | CUDA sampling | Speedup |
-|---:|---:|---:|---:|
-| 50,000 | 7.9 ms | 1.1 ms | 7.5× |
-| 500,000 | 78.6 ms | 6.8 ms | 11.5× |
-| 1,000,000 | 164.9 ms | 18.7 ms | 8.8× |
+| Particles | CPU sampling | CUDA sampling | CPU flow step | CUDA flow step |
+|---:|---:|---:|---:|---:|
+| 50,000 | 11.2 ms | 0.8 ms | 0.8 ms | 0.8 ms |
+| 500,000 | 104.2 ms | 4.2 ms | 11.3 ms | 4.2 ms |
+| 1,000,000 | 222.8 ms | 8.9 ms | 31.8 ms | 10.9 ms |
 
-Ray marching a full 1280×720 frame at 256 steps took 1.7–3.8 ms per frame for
-states up to n = 7. Each image matches a 4096-step reference within a maximum
-RGB error of 0.005. Flow updates that copy results back to the host are
-currently slower on the GPU than on the CPU. Keeping buffers on the device is
-planned.
+At 1M particles, CUDA sampling is 25× faster than the CPU and a flow step is
+2.9× faster. Persistent device buffers and on-device validation cut the GPU flow
+step from 42 ms to 11 ms. Run `compute_tests --benchmark` to reproduce. Ray
+marching a full 1280×720 frame at 256 steps took 1.7–3.8 ms for states up to
+n = 7. Each frame matches a 4096-step reference within a maximum RGB error of
+0.005.
 
 ## Quick start
 
@@ -146,7 +148,8 @@ Releases.
 - [x] Two-orbital time-dependent interference
 - [x] Orbital density sonification and WAV export
 - [x] Interference sonification and validation of additional state pairs
-- [ ] Device-resident CUDA buffers and CUDA/OpenGL interop
+- [x] Device-resident CUDA buffers with transactional on-device validation
+- [ ] CUDA/OpenGL interop, so the viewer draws GPU-resident clouds without host copies
 - [ ] Additional validated physics models, such as lattice phonons
 
 ## Acknowledgments
