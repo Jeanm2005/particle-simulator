@@ -68,7 +68,6 @@ jobs:
           cp web/index.html web/style.css package/share/atom_sim/web/
           cp -r web/dist package/share/atom_sim/web/
           cp tools/serve.py package/share/atom_sim/tools/
-          cp -r docs package/
           tar -czf "particle-simulator-linux-x86_64-${MODE}.tar.gz" -C package .
           sha256sum "particle-simulator-linux-x86_64-${MODE}.tar.gz" > "particle-simulator-linux-x86_64-${MODE}.tar.gz.sha256"
       - uses: actions/upload-artifact@v6

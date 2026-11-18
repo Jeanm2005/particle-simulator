@@ -2,8 +2,10 @@
 """Check the element catalog against downloaded CIAAW and NIST reference pages.
 
 Usage: python3 tools/audit_elements.py CIAAW_HTML NIST_CONFIG_HTML
-Source URLs and the conservative treatment of uncovered data are documented in
- docs/element-data.md. No network access or third-party Python packages required.
+Sources: https://ciaaw.org/abridged-atomic-weights.htm (standard atomic weights)
+and https://math.nist.gov/DFTdata/atomdata/configuration.html (neutral
+configurations, H through U). Higher-Z configurations are withheld; zero mass
+means unavailable. No network access or third-party Python packages required.
 """
 import html
 import json
