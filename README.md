@@ -1,345 +1,153 @@
-# Quantum Atom Simulator
+# Quantum Orbital Simulator
 
-Interactive **3D** quantum orbital visualiser in modern C++, with a native
-OpenGL viewer and a TypeScript browser interface.
+[![CI](https://github.com/Jeanm2005/particle-simulator/actions/workflows/ci.yml/badge.svg)](https://github.com/Jeanm2005/particle-simulator/actions/workflows/ci.yml)
+![C++17](https://img.shields.io/badge/C%2B%2B-17-00599C)
+![CUDA](https://img.shields.io/badge/CUDA-optional-76B900)
+![TypeScript](https://img.shields.io/badge/TypeScript-UI-3178C6)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-Exact hydrogenic wavefunctions from the Schrödinger equation, scaled by nuclear
-charge \(Z\) or Slater \(Z_\text{eff}\), so the same code works for **any element**.
+Interactive 3D simulator of electron orbitals built on exact solutions of the
+Schrödinger equation. One C++17 physics core drives a native OpenGL viewer, a
+local TypeScript web app, and an in-browser WebAssembly build, with optional
+CUDA acceleration.
 
-## What this is
+## Highlights
 
-A computational-physics / visualisation project that:
+- **Exact hydrogenic physics for any element.** Radial and angular wavefunctions
+  are sampled by inverse-CDF. Charge is either nuclear Z or Slater-screened
+  Z<sub>eff</sub>, using element data for Z = 1–118 audited against CIAAW and NIST.
+- **Time-dependent dynamics.** Probability-current flow, plus normalized
+  two-orbital superpositions whose density beats at the Bohr frequency.
+- **GPU rendering and compute.** Point-cloud and volumetric ray-marching shaders.
+  CUDA kernels handle sampling and flow, and fall back to the CPU at build time
+  and at runtime.
+- **Density sonification.** Turns an orbital's radial density into audio and
+  exports it as WAV. Each radial node is heard as a silence.
+- **Three front ends, one core.** The OpenGL desktop viewer, the local web UI
+  (HTTP to a native worker) and the static WebAssembly demo all share the same
+  validated `ApiSession` protocol.
+- **Tested.** 12 CTest suites, offscreen shader image regressions, HTTP transport
+  tests and Playwright browser tests run in GitHub Actions. Tagged builds publish
+  checksummed Linux packages.
 
-1. Samples electron probability density \(|\psi_{nlm}|^2\) from exact hydrogenic orbitals
-2. Renders a live OpenGL **point cloud** of those samples
-3. Optionally animates particles along the quantum **probability current**
-4. Optionally ray-marches a volumetric density field on the GPU (fragment shader)
-5. Loads element data from `data/elements.json` (Z, symbol, config, mass)
+## Measured results
 
-Console-only mode remains available when OpenGL is unavailable (writes `.xyz` clouds).
+RTX 5080 Laptop GPU under WSL2. Medians of warmed runs that include allocations
+and transfers.
 
-## Reference
+| Particles | CPU sampling | CUDA sampling | Speedup |
+|---:|---:|---:|---:|
+| 50,000 | 7.9 ms | 1.1 ms | 7.5× |
+| 500,000 | 78.6 ms | 6.8 ms | 11.5× |
+| 1,000,000 | 164.9 ms | 18.7 ms | 8.8× |
 
-Physics sampling and visualisation ideas are informed by:
+Ray marching a full 1280×720 frame at 256 steps took 1.7–3.8 ms per frame for
+states up to n = 7. Each image matches a 4096-step reference within a maximum
+RGB error of 0.005. Flow updates that copy results back to the host are
+currently slower on the GPU than on the CPU. Keeping buffers on the device is
+planned.
 
-- **[kavan010/Atoms](https://github.com/kavan010/Atoms)** — Hydrogen Quantum Orbital Visualizer  
-  (real-time OpenGL point clouds, raytracer, Laguerre/Legendre sampling)
+## Quick start
 
-This project extends that direction with:
-
-- Multi-element support via \(Z\) / \(Z_\text{eff}\)
-- Modular CMake layout and clean separation of physics vs rendering
-- Dual CDF sampling (radial + angular)
-- Probability-current flow integrated into the live viewer
-- Optional-at-build-time **CUDA** acceleration with runtime CPU fallback
-
-## Features
-
-| Feature | Status |
-|---------|--------|
-| OpenGL point cloud of \(\|\psi\|^2\) | Done |
-| Orbit / zoom camera | Done |
-| Live change of \(n, l, m\) | Done |
-| Any element via JSON | Done |
-| Dual CDF sampling | Done |
-| Probability-current flow (key **P**) | Done |
-| GPU volumetric raytracer (key **T**) | Done |
-| **CUDA** parallel sampling & updates | Validated on RTX 5080 Laptop GPU; sampling faster, host-return flow slower |
-| TypeScript orbital UI and local JSON transport | Implemented; C++ sampling/current, WebGL point preview |
-| Two-orbital time-dependent interference | Implemented; pure-Z, n ≤ 4, density snapshots |
-| Provisional browser demo | C++ compiled to WebAssembly; CPU physics, WebGL points |
-| Agentic AI workflow helpers | Optional |
-
-## Controls (visual mode)
-
-| Input | Action |
-|-------|--------|
-| Mouse drag | Orbit |
-| Scroll | Zoom |
-| **N** / **B** | \(n\) ↑ / ↓ |
-| **L** / **K** | \(l\) ↑ / ↓ |
-| **M** / **J** | \(m\) ↑ / ↓ |
-| **P** | Toggle probability-current flow |
-| **T** | Toggle POINTS ↔ RAYTRACE |
-| **,** / **.** | Flow speed ↓ / ↑ |
-| **+** / **-** | Particle count |
-| **[** / **]** | Point size |
-| **R** | Resample |
-| **Esc** | Quit |
-
-## Physics (brief)
-
-- Radial \(R_{nl}(r)\): associated Laguerre recurrence + `tgamma` normalisation  
-- Angular \(Y_l^m\): associated Legendre  
-- Sampling: CDF inversion for \(r\) and \(\theta\); \(\phi\) uniform  
-- Probability current (atomic units, polar axis = Y):
-
-\[
-\mathbf{v} = \frac{m}{r\sin\theta}\,\hat\phi
-\]
-
-- Energy: \(E_n = -13.6\,Z^2/n^2\) eV (exact for one-electron ions)
-
-Console input requires whole integers for atomic numbers and m, exact orbital
-labels (1s through 7f, with l < n), and explicit p/s and v/c choices. Invalid
-input exits with an error instead of silently substituting another orbital.
-Both exported clouds and the viewer use Y as the polar axis. Current animation
-rotates samples about Y, preserving their radius and height.
-
-## Screening and validation
-
-Slater screening follows [the grouped shielding rules](https://lampz.tugraz.at/~hadley/ss1/molecules/atoms/slater.php)
-and uses the expanded neutral electron configuration in the element
-JSON. The selected ns/np, nd, or nf group must be occupied. For unoccupied groups
-or custom elements without a configuration, select pure Z instead. Screening is
-an approximation; it does not model excited-state electron rearrangements.
-Invalid sampler parameters and nonfinite distributions are rejected with errors.
-Element data rejects fractional or out-of-range atomic numbers, uses zero for
-invalid mass metadata, and rejects duplicate subshell entries during screening.
-
-Run the screening and sampling regressions with `ctest --test-dir build --output-on-failure`.
-
-## Build
-
-From the repository root, using CMake 3.16+ and a C++17 compiler:
+Requires CMake 3.16+ and a C++17 compiler. The desktop viewer also needs GLFW,
+GLEW, GLM and OpenGL. Without them, CMake builds console mode.
 
 ```bash
-# Debian / Ubuntu / WSL dependencies for the viewer
-sudo apt install build-essential cmake \
-  libglfw3-dev libglew-dev libglm-dev libgl1-mesa-dev
-
+sudo apt install build-essential cmake libglfw3-dev libglew-dev libglm-dev libgl1-mesa-dev
 cmake -S . -B build
-cmake --build build
+cmake --build build -j
 ctest --test-dir build --output-on-failure
 ```
 
-The test suite includes offscreen shader regressions when EGL is available;
-those checks are skipped if an offscreen context cannot be created.
+```bash
+./build/atom_sim --visual      # OpenGL viewer
+./build/atom_sim --console     # headless; writes an .xyz point cloud
+```
 
-When graphics dependencies are missing, CMake builds console mode. To explicitly
-check that fallback:
+Web app (Python 3.10+, Node.js 22+):
 
 ```bash
-cmake -S . -B build-console -DCMAKE_DISABLE_FIND_PACKAGE_OpenGL=ON
-cmake --build build-console
-ctest --test-dir build-console --output-on-failure
+npm --prefix web ci && npm --prefix web run build
+python3 tools/serve.py --binary build/atom_api   # open http://127.0.0.1:8000
 ```
 
-## Run
+Viewer keys: drag to orbit, scroll to zoom, `N/B` `L/K` `M/J` change n, l, m,
+`P` toggles probability flow, `T` toggles ray marching, `R` resamples.
 
-```bash
-./build/atom_sim --visual
-./build/atom_sim --console
+## Architecture
+
+```mermaid
+flowchart LR
+  subgraph Core["C++17 physics core"]
+    QM[QuantumMath<br/>Laguerre / Legendre / Slater]
+    S[RadialSampler<br/>inverse-CDF]
+    M[OrbitalModel · SuperpositionModel · Sonification]
+    D[ComputeDispatch]
+    QM --> S --> M --> D
+  end
+  D --> CPU[CPU]
+  D --> CUDA[CUDA kernels]
+  M --> API[ApiSession protocol]
+  API --> W[atom_api worker] --> PY[serve.py HTTP] --> UI[TypeScript + WebGL UI]
+  API --> WASM[WebAssembly build] --> UI
+  M --> GL[OpenGL viewer<br/>points + ray march]
 ```
 
-For the local browser interface (Python 3.10+ and Node.js 22+):
+| Path | Responsibility |
+|---|---|
+| `src/QuantumMath.cpp`, `src/RadialSampler.cpp` | Wavefunctions, screening, CDF sampling |
+| `src/OrbitalModel.cpp`, `src/Superposition.cpp` | Validated request/result models |
+| `src/Sonification.cpp` | Radial density scan and WAV encoding |
+| `src/ComputeDispatch.cpp`, `cuda/` | CPU/CUDA dispatch with runtime fallback |
+| `src/Engine.cpp`, `include/RaytraceShaders.hpp` | OpenGL point and ray-march rendering |
+| `src/ApiSession.cpp`, `tools/serve.py` | Line protocol, loopback HTTP server |
+| `web/` | TypeScript UI, WebAssembly worker, Playwright tests |
 
-```bash
-npm --prefix web ci
-npm --prefix web run build
-python3 tools/serve.py --binary build/atom_api
-```
+## Physics model
 
-Open `http://127.0.0.1:8000`. Choose an element/state, sample its probability
-cloud, orbit/zoom the preview, and step or play probability current through C++.
-The server also works with a console-only native build. See the
-[local UI and JSON transport guide](docs/local-ui.md) for controls, tests, units,
-preview limits, and the single-active-run behavior.
+- **Wavefunctions.** ψ<sub>nlm</sub> = R<sub>nl</sub>(r) Y<sub>l</sub><sup>m</sup>(θ, φ),
+  for n ≤ 7 and l ≤ 3. Coordinates are in Bohr radii, with Y as the polar axis.
+- **Energy.** E<sub>n</sub> = −13.6 Z<sub>eff</sub><sup>2</sup> / n<sup>2</sup> eV.
+  This is exact for one-electron ions. Slater screening is an approximation.
+- **Probability current.** Samples rotate about Y with v = m / (r sin θ),
+  which preserves both radius and height.
+- **Superpositions.** Two distinct eigenstates of one pure-Z Hamiltonian, each
+  with n ≤ 4, evolve through their relative energy phase.
+- **Sonification.** The scan maps r from 0 to 15n²/Z<sub>eff</sub> onto the
+  clip's duration. A fixed-pitch tone's amplitude follows the normalized
+  r²|R<sub>nl</sub>|², so the clip contains n − l − 1 silences. The output is
+  16-bit mono WAV. This is a mapping of the data; orbitals do not emit audible
+  sound.
 
-Both modes prompt for the element, orbital, and screening choice. Nonspherical
-orbitals also prompt for integer m. Running without an option prompts for the mode
-when graphics support is compiled. `--help` lists the command-line options.
-XYZ output is written to the current directory in atomic units (a0). Failure to
-open or finish writing the file returns a nonzero exit status. Viewer startup
-also returns a nonzero exit status if context creation, shader compilation, or
-shader linking fails.
+Not modeled: relativistic effects, spin, external fields, electron-electron
+correlation. For quantitative chemistry, use a Hartree–Fock or DFT package.
 
-### Install and element data
+## Testing and CI
 
-```bash
-cmake --install build --prefix "$HOME/.local"
-"$HOME/.local/bin/atom_sim" --console
-```
-
-The database searches these locations in order:
-
-1. `QM_DATA_DIR/elements.json`, when the environment variable is set.
-2. `data/elements.json` relative to the current directory.
-3. The installed data directory relative to the executable (also after relocating
-   an installation or launching through PATH).
-4. The installation data directory configured by CMake.
-5. The source tree's data directory, for development builds.
-
-If none loads, the program prints a warning and uses its six-element emergency
-table. An explicit path supplied to `ElementDatabase` bypasses automatic discovery.
-
-### WSL / software graphics
-
-```bash
-export LIBGL_ALWAYS_SOFTWARE=1
-export GALLIUM_DRIVER=llvmpipe
-./build/atom_sim --visual
-```
-
-If graphics initialization still fails, use console mode and import the XYZ file
-into a viewer that supports particle clouds. Coordinates are in a0; convert to
-angstroms when needed using the factor in `Constants.hpp`.
-
-## Layout
-
-```text
-atoms/
-├── CMakeLists.txt
-├── README.md
-├── AGENTS.md
-├── cmake/                # generated data-path configuration template
-├── data/elements.json    # entries Z = 1 … 118
-├── include/              # public headers
-├── src/                  # implementations
-├── tools/serve.py        # loopback UI server and native worker bridge
-├── web/                  # TypeScript UI, point renderer, and browser tests
-└── tests/                # physics, input, and installation regressions
-```
-
-The [element-data audit](docs/element-data.md) records sources and limits for
-Z = 1 through 118. Standard atomic weights use CIAAW abridged values; zero means
-unavailable. Neutral configurations are checked against NIST through Z = 92;
-higher-Z configurations are withheld, so those entries require pure Z.
-Custom positive Z, including 119, remains available without catalog metadata.
+`ctest` runs the physics, screening, sampling, model, superposition,
+sonification, dispatch, CUDA-parity, console, installation and HTTP-transport
+suites, plus EGL shader image checks when available. `npm test` in `web/` runs
+the browser suite. GitHub Actions builds console, OpenGL, CUDA (CPU-fallback)
+and WebAssembly targets. Pushing a `v*` tag publishes tested Linux packages to
+Releases.
 
 ## Roadmap
 
-- [x] Fix screening, validate finite distributions, and cover the crash with tests.
-- [x] Fix C++17 portability, input parsing, coordinates, and probability flow.
-- [x] Repair documentation, installed data discovery, and export/shader errors.
-- [x] Implement CUDA sampling and flow kernels with CPU fallback and parity/benchmark runner.
-- [x] Validate CUDA compilation and CPU runtime fallback in CI.
-- [x] Validate representative numerical parity and performance on RTX 5080 Laptop GPU; see [CUDA measurements](docs/cuda-measurements.md).
-- [x] Match ray-march camera projection, bound rays to orbital size, and use consistent density/opacity.
-- [x] Measure representative higher-orbital convergence and software-renderer performance; tune stepping.
-- [x] Measure 1280x720 shader throughput on RTX 5080 Laptop GPU; interactive presentation remains unmeasured.
+- [x] Exact orbitals, Slater screening, element database audit
+- [x] OpenGL point cloud, ray marching, probability current
+- [x] CUDA sampling/flow with measured parity and performance
+- [x] TypeScript UI, local JSON transport, WebAssembly demo
+- [x] Two-orbital time-dependent interference
+- [x] Orbital density sonification and WAV export
+- [ ] Sonification of interference and additional basis states
+- [ ] Device-resident CUDA buffers and CUDA/OpenGL interop
+- [ ] Additional validated physics models, such as lattice phonons
 
-CUDA implementation lives in `cuda/`. `QM_ENABLE_CUDA` defaults to ON and detects
-an available CUDA compiler; use `-DQM_ENABLE_CUDA=OFF` for an explicit CPU build.
-Missing compilers, unavailable devices, and CUDA runtime errors retain CPU sampling
-and flow. Sampling uses the same validated CPU-built CDF tables; GPU random streams
-are reproducible but differ from the CPU generator. GPU flow uses the same exact
-rotation about Y. The initial implementation copies results back to host memory;
-it does not yet use CUDA/OpenGL interop or persistent device buffers.
+## Acknowledgments
 
-Run `./build/compute_tests --cuda` for numerical checks and end-to-end CPU/GPU
-timings at 50k, 500k, and 1M particles. CTest marks CUDA parity skipped without a
-usable device. CUDA compilation and CPU runtime fallback passed the first GitHub Actions run
-in the CUDA development container. Representative GPU parity checks and warmed dispatch measurements passed on
-an RTX 5080 Laptop GPU under WSL2 on 2026-10-23. See
-[CUDA measurements](docs/cuda-measurements.md) for raw results, timing boundaries,
-and limitations. Sampling improved; host-return flow remained slower than CPU.
-A single local CPU baseline for hydrogen 1s measured sampling/flow respectively:
-50k: 18.6/1.0 ms; 500k: 184.8/8.1 ms; 1M: 382.1/15.8 ms.
-These are indicative wall-clock measurements, not GPU speedup claims.
+The visualization approach was inspired by
+[kavan010/Atoms](https://github.com/kavan010/Atoms).
 
-Later work includes extending sourced configuration coverage and native Windows build instructions.
+## License
 
-## Accuracy
-
-Hydrogenic wavefunctions are exact for the nonrelativistic one-electron model.
-Multi-electron screening is approximate. Ray-march rendering remains a visual approximation: rays intersect the sampling
-sphere, use 256 midpoint steps on a grid concentrated near the nucleus, and share
-an orbital-wide density scale estimated
-from radial/angular grids. Exponential opacity includes step length and uses an
-orbital-size scale for visualization; displayed opacity is not a measured observable.
-Both rendering paths use a 45-degree vertical field of view. Offscreen tests cover
-ray misses, cameras inside the volume, charge scaling, camera distance, and step
-convergence for representative s/p/d/f states through n=7 from two viewing angles.
-These checks compare float images against a 4096-step numerical reference; they
-are not a proof of accuracy for every state, camera, or resolution. For quantitative
-chemistry, use a suitable Hartree–Fock or DFT package.
-
-Run `EGL_PLATFORM=surfaceless LIBGL_ALWAYS_SOFTWARE=1 ./build/shader_tests --benchmark`
-for optional synchronized frame timings and convergence errors. CTest runs the
-image regressions without timing assertions. See [renderer measurements](docs/renderer-measurements.md)
-for the sampling method, local baseline, and remaining validation.
-
-## Product scope and future milestones
-
-The intended product is an interactive quantum and particle physics simulator:
-users choose a supported particle or enter its defining state/parameters, then
-explore its modeled behavior and visual representation. A TypeScript UI is the
-implemented interface for the current C++ atomic-orbital model.
-
-Coverage must grow through explicit, validated physics models. Arbitrary particle
-input alone cannot determine dynamics: the model also needs interactions, initial
-state, boundary conditions, and a regime of validity. Visuals must identify whether
-they show probability density, a field, detector observables, or another quantity,
-and disclose approximations. Elementary particles are not assigned invented shapes.
-
-- [x] Define supported particle categories, inputs, observables, and model validity.
-- [x] Implement a graphics-independent orbital model/backend adapter with validated requests and execution metadata.
-- [x] Choose local HTTP/native-worker transport and connect a TypeScript interactive UI.
-- [ ] Add validated models beyond hydrogenic atomic orbitals incrementally.
-- [ ] Add optional orbital sonification: density scan, explicit audio mapping, WAV export.
-- [x] Add normalized two-orbital superpositions and time-dependent interference visualization.
-- [x] Prepare a provisional browser demo with the same C++ physics compiled to WebAssembly.
-- [ ] Extend interference to sonification and validate additional basis/state combinations.
-- [ ] Explore lattice dynamics and phonons as a separate model extension.
-
-Next steps, in recommended order:
-
-1. Element-data provenance audit completed for the documented coverage; extend
-   sourced configurations above Z = 92 before enabling their Slater screening.
-2. NVIDIA parity/throughput and 1280x720 shader throughput measured on RTX 5080
-   Laptop GPU; reduce flow transfer overhead and measure interactive presentation
-   before claiming faster animation or end-to-end window frame rates.
-3. Implement optional density sonification and WAV export with a documented
-   mapping and numerical/audio checks, then extend it to interference.
-4. Add the next independently validated physics model; keep lattice/phonon work
-   exploratory until interactions, boundaries, and observables are specified.
-
-The [model scope and contract](docs/model-scope.md) defines the first supported
-model, validated inputs, units, output meanings, and required UI disclosures.
-Its typed C++ request/result contract is implemented by `OrbitalModel` in the
-`qm_model` CMake target, with a 1,000,000-sample limit, configurable seed, explicit
-CPU or automatic CUDA/CPU selection, stable errors, and atomic-unit current
-updates. Console and viewer execution share the same sampling/flow dispatch.
-The local JSON API and TypeScript UI use that adapter; full clouds stay in C++
-while the browser displays at most 20,000 preview samples. The UI also supports the validated two-orbital model; see
-[superposition physics and limits](docs/superpositions.md). Future models remain
-unavailable until validated.
-
-Sonification maps simulation data to audible signals; its audio is not literal
-sound emitted by an isolated orbital. Phonons require interacting lattice atoms,
-which the existing model does not simulate.
-
-## CI and release delivery
-
-[GitHub Actions](.github/workflows/ci.yml) runs on pull requests, pushes to `main`,
-`v*` tags, and manual dispatch. It builds and tests Linux console and OpenGL modes
-with CUDA disabled, requires software-EGL shader coverage, and separately compiles
-the CUDA backend in a CUDA 12.6 development container. That container has no GPU:
-it tests runtime CPU fallback; representative GPU parity/performance was measured locally on RTX 5080 Laptop GPU.
-The CUDA compile target uses architecture 75 and is not shipped as a release binary.
-
-Each successful Linux job uploads an installed package containing `bin/atom_sim`,
-`bin/atom_api`, element data, the compiled browser UI and local server, docs,
-README, and a SHA-256 checksum. Test logs are retained for 14 days. A separate
-frontend job builds the pinned WebAssembly toolchain and runs TypeScript, native,
-and browser-engine tests; release delivery
-requires it to pass along with native jobs.
-Pushing a version tag (for example `v1.2.0`) publishes both tested packages to
-GitHub Releases only after all build/test jobs pass. Re-running the tag workflow
-updates assets on its existing release. No custom credentials are required;
-only the release job receives repository write permission.
-
-Packages target Ubuntu 24.04 x86_64. The OpenGL package requires GLFW, GLEW, GLM,
-and Mesa/OpenGL runtime libraries; install the viewer dependencies listed above.
-Extract a package, then run `./bin/atom_sim --console` or `--visual`.
-To open the packaged UI, run
-`python3 share/atom_sim/tools/serve.py --binary bin/atom_api` and open its local
-URL. Node is not needed for packaged UI use. The [provisional browser demo guide](docs/browser-demo.md) describes the static
-WebAssembly deployment, browser limits, and build instructions.
-
-The [CI run for d60ae84](https://github.com/Jeanm2005/particle-simulator/actions/runs/37868173667)
-passed Linux console, OpenGL/software-EGL, CUDA compilation/runtime fallback,
-and native/WebAssembly browser tests on October 9, 2026. This verifies software
-rendering and CUDA fallback. Separate local NVIDIA runtime measurements are
-recorded in [CUDA measurements](docs/cuda-measurements.md). Branch protection can require all four build/test jobs before merging.
+[MIT](LICENSE)
