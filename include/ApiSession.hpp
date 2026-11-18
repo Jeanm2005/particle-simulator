@@ -1,5 +1,6 @@
 #pragma once
 #include "Superposition.hpp"
+#include "PhononModel.hpp"
 #include <optional>
 namespace qm {
 // Native worker and browser WebAssembly share this stateful protocol implementation.
@@ -13,6 +14,8 @@ private:
     SuperpositionModel superposition_;
     std::optional<OrbitalResult> current_;
     std::optional<SuperpositionResult> coherent_;
+    PhononModel phonons_;
+    std::optional<PhononResult> lattice_;
     double time_ = 0;
     int sampleLimit_;
 };

@@ -71,6 +71,25 @@ def sample_command(value):
     return command
 
 
+def lattice_command(value):
+    fields(value, ("contractVersion", "model", "lattice"))
+    fields(value["lattice"], ("cells", "massRatio", "branch", "modeIndex", "amplitude"), "lattice")
+    spec = value["lattice"]
+    command = ["lattice", whole(value["contractVersion"], -2**31, 2**31-1, "contractVersion"), text(value["model"], "model"),
+               whole(spec["cells"], -2**31, 2**31-1, "lattice.cells")]
+    for key in ("massRatio",):
+        number = spec[key]
+        if type(number) not in (int, float) or not math.isfinite(number) or abs(number) > 1e6:
+            raise ApiError("Expected a finite number", "lattice." + key)
+        command.append(repr(float(number)))
+    command += [text(spec["branch"], "lattice.branch"), whole(spec["modeIndex"], -2**31, 2**31-1, "lattice.modeIndex")]
+    number = spec["amplitude"]
+    if type(number) not in (int, float) or not math.isfinite(number) or abs(number) > 1e6:
+        raise ApiError("Expected a finite number", "lattice.amplitude")
+    command.append(repr(float(number)))
+    return " ".join(command)
+
+
 def unique_object(pairs):
     result = {}
     for key, value in pairs:
@@ -146,6 +165,9 @@ class Worker:
                 return self.exchange("catalog")
             if route == "/api/sample":
                 result = self.exchange(sample_command(value))
+                self.run_id = uuid.uuid4().hex
+            elif route == "/api/lattice":
+                result = self.exchange(lattice_command(value))
                 self.run_id = uuid.uuid4().hex
             elif route == "/api/sonify":
                 fields(value, ("runId", "durationSeconds", "sampleRate", "baseFrequencyHz"))
@@ -238,7 +260,7 @@ def create_server(worker, web_root, port=8000):
             try:
                 self.valid_origin()
                 path = urlsplit(self.path).path
-                if path not in ("/api/sample", "/api/advance", "/api/sonify"):
+                if path not in ("/api/sample", "/api/advance", "/api/sonify", "/api/lattice"):
                     raise ApiError("Unknown POST route", status=404)
                 if self.headers.get("Content-Type", "").split(";", 1)[0].strip() != "application/json":
                     raise ApiError("Use application/json", status=415)

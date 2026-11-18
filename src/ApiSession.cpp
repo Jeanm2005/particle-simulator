@@ -87,6 +87,25 @@ void interference(std::ostream& out, const qm::InterferenceSonification& s, cons
     out << ",\"frames\":" << s.pcm.size() << ",\"peakFraction\":" << qm::sonificationPeak
         << ",\"mimeType\":\"audio/wav\",\"wavBase64\":\"" << base64(qm::encodeWav(s.pcm, s.request.sampleRate)) << "\"}}";
 }
+void lattice(std::ostream& out, const qm::PhononResult& r) {
+    const auto& q = r.request;
+    const bool acoustic = q.branch == qm::PhononBranch::Acoustic;
+    out << "{\"contractVersion\":1,\"modelVersion\":1,\"request\":{\"contractVersion\":1,\"model\":\"lattice-phonons\",\"lattice\":{\"cells\":"
+        << q.cells << ",\"massRatio\":" << q.massRatio << ",\"branch\":\"" << (acoustic ? "acoustic" : "optical")
+        << "\",\"modeIndex\":" << q.modeIndex << ",\"amplitude\":" << q.amplitude << "}}"
+        << ",\"units\":{\"length\":\"lattice-constant\",\"frequency\":\"sqrt(K/m1)\",\"time\":\"sqrt(m1/K)\",\"displacement\":\"longitudinal\"}"
+        << ",\"wavenumber\":" << r.mode.wavenumber << ",\"angularFrequency\":" << r.mode.angularFrequency
+        << ",\"groupVelocity\":" << r.mode.groupVelocity << ",\"soundSpeed\":" << r.soundSpeed
+        << ",\"acousticMax\":" << r.acousticMax << ",\"opticalMin\":" << r.opticalMin << ",\"opticalMax\":" << r.opticalMax
+        << ",\"displayGain\":" << r.displayGain << ",\"timeReduced\":" << r.timeReduced << ",\"atomCount\":" << r.points.size();
+    out << ",\"points\":[";
+    for (std::size_t i = 0; i < r.points.size(); ++i)
+        out << (i ? "," : "") << '[' << r.points[i][0] << ',' << r.points[i][1] << ',' << r.points[i][2] << ']';
+    out << "],\"dispersion\":[";
+    for (std::size_t i = 0; i < r.dispersion.size(); ++i)
+        out << (i ? "," : "") << '[' << r.dispersion[i][0] << ',' << r.dispersion[i][1] << ',' << r.dispersion[i][2] << ']';
+    out << "]}";
+}
 void element(std::ostream& out, const qm::Element& e) {
     out << "{\"atomicNumber\":" << e.Z << ",\"symbol\":"; string(out, e.symbol);
     out << ",\"name\":"; string(out, e.name);
@@ -156,7 +175,8 @@ std::string ApiSession::execute(const std::string& line) {
                 out << "{\"contractVersion\":" << caps.contractVersion << ",\"modelVersion\":" << caps.modelVersion
                           << ",\"model\":\"hydrogenic-orbital\",\"maxN\":" << caps.maxN << ",\"maxL\":" << caps.maxL
                           << ",\"maxSamples\":" << sampleLimit_ << ",\"maxPreviewPoints\":" << previewLimit
-                          << ",\"maxSuperpositionN\":4,\"maxSuperpositionSamples\":20000,\"models\":[\"hydrogenic-orbital\",\"orbital-superposition\"]"
+                          << ",\"maxSuperpositionN\":4,\"maxSuperpositionSamples\":20000,\"models\":[\"hydrogenic-orbital\",\"orbital-superposition\",\"lattice-phonons\"]"
+                          << ",\"lattice\":{\"minCells\":2,\"maxCells\":256,\"minMassRatio\":0.1,\"maxMassRatio\":10,\"maxAmplitude\":0.25}"
                           << ",\"sonification\":{\"mapping\":\"radial-density-scan\",\"mappingVersion\":1,\"minDurationSeconds\":0.5,\"maxDurationSeconds\":10,\"sampleRates\":[22050,44100,48000],\"minBaseFrequencyHz\":55,\"maxBaseFrequencyHz\":1760,\"models\":[\"hydrogenic-orbital\",\"orbital-superposition\"]}"
                           << ",\"units\":{\"coordinates\":\"a0\",\"energy\":\"eV\",\"time\":\"atomic-unit\",\"polarAxis\":\"Y\"},\"elements\":[";
                 bool first = true;
@@ -191,16 +211,32 @@ std::string ApiSession::execute(const std::string& line) {
                     combination.relativePhase = real(input, "superposition.phase");
                     end(input);
                     auto sampled = superposition_.run(combination);
-                    coherent_ = std::move(sampled); current_.reset(); time_ = 0;
+                    coherent_ = std::move(sampled); current_.reset(); lattice_.reset(); time_ = 0;
                     result(out, coherent_->orbital, time_, coherent_->orbital.observables.execution, &coherent_->request);
                     return out.str();
                 }
                 end(input);
                 auto sampled = model_.run(request);
-                current_ = std::move(sampled); coherent_.reset(); time_ = 0;
+                current_ = std::move(sampled); coherent_.reset(); lattice_.reset(); time_ = 0;
                 result(out, *current_, time_, current_->observables.execution);
+            } else if (operation == "lattice") {
+                qm::PhononRequest request;
+                request.contractVersion = integer<int>(input, "contractVersion");
+                request.model = token(input, "model");
+                request.cells = integer<int>(input, "lattice.cells");
+                request.massRatio = real(input, "lattice.massRatio");
+                const auto branch = token(input, "lattice.branch");
+                if (branch != "acoustic" && branch != "optical")
+                    throw qm::ModelError("invalid-input", "lattice.branch", "Branch must be acoustic or optical");
+                request.branch = branch == "acoustic" ? qm::PhononBranch::Acoustic : qm::PhononBranch::Optical;
+                request.modeIndex = integer<int>(input, "lattice.modeIndex");
+                request.amplitude = real(input, "lattice.amplitude");
+                end(input);
+                auto computed = phonons_.run(request);
+                lattice_ = std::move(computed); current_.reset(); coherent_.reset(); time_ = 0;
+                lattice(out, *lattice_);
             } else if (operation == "advance") {
-                if (!current_ && !coherent_) throw qm::ModelError("invalid-input", "runId", "Sample an orbital first");
+                if (!current_ && !coherent_ && !lattice_) throw qm::ModelError("invalid-input", "runId", "Sample an orbital first");
                 const auto text = token(input, "dt");
                 std::size_t consumed = 0;
                 double dt;
@@ -209,6 +245,11 @@ std::string ApiSession::execute(const std::string& line) {
                 if (consumed != text.size() || !std::isfinite(dt) || !std::isfinite(time_ + dt))
                     throw qm::ModelError("invalid-input", "dt", "Expected finite atomic-unit time");
                 end(input);
+                if (lattice_) {
+                    phonons_.advance(*lattice_, dt); time_ = lattice_->timeReduced;
+                    lattice(out, *lattice_);
+                    return out.str();
+                }
                 if (coherent_) {
                     superposition_.advance(*coherent_, dt); time_ = coherent_->timeAtomicUnits;
                     result(out, coherent_->orbital, time_, coherent_->orbital.observables.execution, &coherent_->request);
@@ -223,6 +264,7 @@ std::string ApiSession::execute(const std::string& line) {
                 request.baseFrequencyHz = real(input, "sonification.baseFrequencyHz");
                 end(input);
                 qm::validateSonification(request);
+                if (lattice_) throw qm::ModelError("unsupported-model", "model", "Sonification is available for orbitals and superpositions");
                 if (coherent_) {
                     interference(out, qm::sonifyInterference(coherent_->request, coherent_->timeAtomicUnits, request), coherent_->request);
                     return out.str();

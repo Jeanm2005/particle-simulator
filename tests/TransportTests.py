@@ -201,6 +201,40 @@ class TransportTests(unittest.TestCase):
         self.assertEqual(status, 422)
         self.assertEqual(error["error"]["field"], "superposition.state")
 
+    def test_lattice_phonons(self):
+        _, catalog = self.call("/api/catalog")
+        self.assertIn("lattice-phonons", catalog["models"])
+        body = {"contractVersion": 1, "model": "lattice-phonons",
+                "lattice": {"cells": 16, "massRatio": 2.0, "branch": "optical", "modeIndex": 8, "amplitude": 0.1}}
+        status, chain = self.call("/api/lattice", body)
+        self.assertEqual(status, 200)
+        self.assertEqual(chain["atomCount"], 32)
+        self.assertEqual(len(chain["points"]), 32)
+        self.assertEqual(len(chain["dispersion"]), 129)
+        self.assertAlmostEqual(chain["angularFrequency"], math.sqrt(2), places=12)
+        self.assertAlmostEqual(chain["acousticMax"], 1.0, places=12)
+        self.assertAlmostEqual(chain["soundSpeed"], math.sqrt(1 / 6), places=12)
+        status, later = self.call("/api/advance", {"runId": chain["runId"], "dt": 0.5})
+        self.assertEqual(status, 200)
+        self.assertEqual(later["timeReduced"], 0.5)
+        self.assertNotEqual(later["points"], chain["points"])
+        status, error = self.call("/api/sonify", {"runId": chain["runId"], "durationSeconds": 1, "sampleRate": 22050, "baseFrequencyHz": 220})
+        self.assertEqual(error["error"]["code"], "unsupported-model")
+        for key, value, field in (("cells", 1, "lattice.cells"), ("cells", 1.5, "lattice.cells"), ("massRatio", 20, "lattice.massRatio"),
+                                  ("massRatio", "2", "lattice.massRatio"), ("branch", "transverse", "lattice.branch"),
+                                  ("modeIndex", 9, "lattice.modeIndex"), ("amplitude", 0.5, "lattice.amplitude")):
+            with self.subTest(key=key, value=value):
+                invalid = json.loads(json.dumps(body))
+                invalid["lattice"][key] = value
+                status, error = self.call("/api/lattice", invalid)
+                self.assertGreaterEqual(status, 400)
+                self.assertEqual(error["error"]["field"], field)
+        self.assertEqual(self.call("/api/lattice", dict(body, extra=1))[0], 400)
+        # Rejected requests keep the previous run active; a new sample replaces it.
+        self.assertEqual(self.call("/api/advance", {"runId": chain["runId"], "dt": 0.5})[0], 200)
+        self.assertEqual(self.call("/api/sample", request(sampleCount=10))[0], 200)
+        self.assertEqual(self.call("/api/advance", {"runId": chain["runId"], "dt": 0.5})[0], 409)
+
     def test_worker_failure_and_busy(self):
         self.worker.lock.acquire()
         try:
